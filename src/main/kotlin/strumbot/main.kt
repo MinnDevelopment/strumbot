@@ -10,10 +10,14 @@ import net.dv8tion.jda.api.JDABuilder
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent
 import net.dv8tion.jda.api.utils.cache.CacheFlag
 import okhttp3.OkHttpClient
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import reactor.core.scheduler.Schedulers
 import java.util.EnumSet.noneOf
 import java.util.concurrent.Executors
 import kotlin.concurrent.thread
+
+private val log = LoggerFactory.getLogger("Main") as Logger
 
 private val pool = Executors.newScheduledThreadPool(2) {
     thread(start=false, name="Worker-Thread", isDaemon=true, block=it::run)
@@ -69,10 +73,12 @@ private fun setupRankListener(jda: JDA, configuration: Configuration) {
             if (role != null) {
                 // Add/Remove the role to the member and send a success message
                 if (member.roles.any { it.idLong == role.idLong }) {
+                    log.debug("Adding ${role.name} to ${member.user.asTag}")
                     it.guild.removeRoleFromMember(member, role).asMono().then {
                         it.channel.sendMessage("$mention, you left **${role.name}**.").asMono()
                     }
                 } else {
+                    log.debug("Removing ${role.name} from ${member.user.asTag}")
                     it.guild.addRoleToMember(member, role).asMono().then {
                         it.channel.sendMessage("$mention, you joined **${role.name}**.").asMono()
                     }
@@ -82,6 +88,6 @@ private fun setupRankListener(jda: JDA, configuration: Configuration) {
                 it.channel.sendMessage("$mention I don't know that role!").asMono()
             }
         }
-        .onErrorContinue { t, _ -> t.printStackTrace() } // TODO: Use logger?
+        .onErrorContinue { t, _ -> log.error("Rank service encountered exception", t) }
         .subscribe()
 }

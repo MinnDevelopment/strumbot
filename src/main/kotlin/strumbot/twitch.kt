@@ -61,6 +61,7 @@ class TwitchApi(
                     stream.getString("title"),
                     stream.getString("type"),
                     stream.getString("thumbnail_url"),
+                    stream.getString("user_id"),
                     OffsetDateTime.parse(stream.getString("started_at"))
                 )
             }
@@ -111,18 +112,7 @@ class TwitchApi(
             .build()
 
         makeRequest(request) { response ->
-            val json = DataObject.fromJson(response.body()!!.byteStream())
-            val data = json.getArray("data")
-            if (data.isEmpty)
-                null
-            else {
-                val video = data.getObject(0)
-                val url = video.getString("url")
-                val title = video.getString("title")
-                val duration = video.getString("duration")
-                val thumbnail = video.getString("thumbnail_url")
-                Video(url, title, duration, thumbnail)
-            }
+            handleVideo(response)
         }
     }
 
@@ -133,18 +123,23 @@ class TwitchApi(
             .build()
 
         makeRequest(request) { response ->
-            val json = DataObject.fromJson(response.body()!!.byteStream())
-            val data = json.getArray("data")
-            if (data.isEmpty)
-                null
-            else {
-                val video = data.getObject(0)
-                val url = video.getString("url")
-                val title = video.getString("title")
-                val duration = video.getString("duration")
-                val thumbnail = video.getString("thumbnail_url")
-                Video(url, title, duration, thumbnail)
-            }
+            handleVideo(response)
+        }
+    }
+
+    private fun handleVideo(response: Response): Video? {
+        val json = DataObject.fromJson(response.body()!!.byteStream())
+        val data = json.getArray("data")
+        return if (data.isEmpty)
+            null
+        else {
+            val video = data.getObject(0)
+            val id = video.getString("id")
+            val url = video.getString("url")
+            val title = video.getString("title")
+            val duration = video.getString("duration")
+            val thumbnail = video.getString("thumbnail_url")
+            Video(id, url, title, duration, thumbnail)
         }
     }
 
@@ -171,8 +166,10 @@ data class Stream(
     val title: String,
     val type: String,
     val thumbnail: String,
+    val userId: String,
     val startedAt: OffsetDateTime)
 data class Video(
+    val id: String,
     val url: String,
     val title: String,
     val duration: String,

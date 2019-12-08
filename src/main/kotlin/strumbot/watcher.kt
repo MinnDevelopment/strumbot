@@ -11,12 +11,14 @@ import club.minnced.jda.reactor.then
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.Activity
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.publisher.switchIfEmpty
 import reactor.core.publisher.toMono
 import reactor.core.scheduler.Scheduler
-import reactor.util.function.Tuple3
+import reactor.util.function.Tuple4
 import java.io.InputStream
 import java.time.Duration
 import java.time.OffsetDateTime
@@ -24,6 +26,7 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ScheduledExecutorService
 
+private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
 const val OFFLINE_DELAY = 2L * 60L // 2 minutes
 
 data class StreamElement(val game: Game, val timestamp: Int, val videoId: String)
@@ -33,7 +36,6 @@ class StreamWatcher(
     private val jda: JDA,
     private val configuration: Configuration) {
 
-    // TODO: Handle stream hickups (might go offline and back online within the 10 second window)
     @Volatile private var currentElement: StreamElement? = null
     private var offlineTimestamp = 0L
     private var streamStarted = 0L
@@ -62,10 +64,13 @@ class StreamWatcher(
                         .switchIfEmpty {
                             handleOffline(webhook).then(Mono.empty())
                         }
-                        .flatMap { stream ->
+                        .flatMap { Mono.zip(it.toMono(), twitch.getLatestBroadcastByUser(it.userId).map(Video::id)) }
+                        .flatMap { tuple ->
+                            val stream = tuple.t1
+                            val videoId = tuple.t2
                             offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                             if (stream.gameId != currentElement?.game?.gameId) {
-                                handleUpdate(stream, webhook)
+                                handleUpdate(stream, videoId, webhook)
                             } else {
                                 // Unchanged
                                 Mono.empty<Unit>()
@@ -74,7 +79,10 @@ class StreamWatcher(
                 } else {
                     twitch.getStreamByLogin(configuration.twitchUser)
                         .flatMap { stream ->
-                            Mono.zip(stream.toMono(), twitch.getGame(stream), twitch.getThumbnail(stream))
+                            Mono.zip(stream.toMono(),
+                                twitch.getGame(stream),
+                                twitch.getLatestBroadcastByUser(stream.userId).map(Video::id),
+                                twitch.getThumbnail(stream))
                         }
                         .flatMap { tuple ->
                             offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
@@ -82,7 +90,7 @@ class StreamWatcher(
                         }
                 }
             }
-            .onErrorContinue { t, _ -> t.printStackTrace() } //TODO: User logger
+            .onErrorContinue { t, _ -> log.error("Error in twitch stream service", t) }
             .doOnEach { System.gc() }
             .publishOn(scheduler)
             .subscribe()
@@ -120,7 +128,7 @@ class StreamWatcher(
             return Mono.empty()
         }
 
-        println("Stream went offline!")
+        log.info("Stream went offline!")
         jda.presence.activity = null
         timestamps.add(currentElement!!)
         val videoId = currentElement!!.videoId
@@ -163,18 +171,19 @@ class StreamWatcher(
     }
 
     private fun handleGoLive(
-        tuple: Tuple3<Stream, Game, InputStream>,
+        tuple: Tuple4<Stream, Game, String, InputStream>,
         webhook: WebhookClient
     ): Mono<ReadonlyMessage> {
         val stream = tuple.t1
         val game = tuple.t2
-        val thumbnail = tuple.t3
+        val videoId = tuple.t3
+        val thumbnail = tuple.t4
 
-        println("Started with game ${game.gameId}")
+        log.info("Stream started with game ${game.gameId}")
         jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${configuration.twitchUser}")
         streamStarted = stream.startedAt.toEpochSecond()
         val roleId = getRole("live")
-        currentElement = StreamElement(game, 0, stream.streamId)
+        currentElement = StreamElement(game, 0, videoId)
         return withPing(roleId) { mention ->
             val embed = makeEmbed(stream, game, thumbnail, configuration.twitchUser)
                 .setContent("$mention ${configuration.twitchUser} is live with ${game.name}!")
@@ -186,15 +195,16 @@ class StreamWatcher(
 
     private fun handleUpdate(
         stream: Stream,
+        videoId: String,
         webhook: WebhookClient
     ): Mono<ReadonlyMessage> {
-        println("Changed game ${currentElement?.game?.gameId} -> ${stream.gameId}")
+        log.info("Stream changed game ${currentElement?.game?.gameId} -> ${stream.gameId}")
         timestamps.add(currentElement!!)
         return twitch.getGame(stream)
             .flatMap { game ->
                 jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${configuration.twitchUser}")
                 val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
-                currentElement = StreamElement(game, timestamp, stream.streamId)
+                currentElement = StreamElement(game, timestamp, videoId)
                 Mono.zip(game.toMono(), twitch.getThumbnail(stream))
             }
             .flatMap { tuple ->

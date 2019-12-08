@@ -1,0 +1,11 @@
+{
+  "discord": {
+    "token": "NjUzMjM1MjY5MzM1NjQ2MjA4.*******.*******",
+    "webhook": "https://discordapp.com/api/webhooks/*******/******",
+    "ranks": ["live", "vod", "update"]
+  },
+  "twitch": {
+    "client_id": "*******",
+    "client_secret": "*******"
+  }
+}

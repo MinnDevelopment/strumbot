@@ -10,6 +10,7 @@ import club.minnced.jda.reactor.asMono
 import club.minnced.jda.reactor.then
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.Permission
+import net.dv8tion.jda.api.entities.Activity
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.publisher.switchIfEmpty
@@ -107,7 +108,7 @@ class StreamWatcher(
         val hours = duration.toHours()
         val minutes = duration.minusHours(hours).toMinutes()
         val seconds = duration.minusHours(hours).minusMinutes(minutes).toSeconds()
-        return String.format("%02dh%02dm%02ds", hours, minutes, seconds)
+        return "%02dh%02dm%02ds".format(hours, minutes, seconds)
     }
 
     private fun handleOffline(webhook: WebhookClient): Mono<ReadonlyMessage> {
@@ -119,6 +120,7 @@ class StreamWatcher(
         }
 
         println("Stream went offline!")
+        jda.presence.activity = null
         timestamps.add(currentElement!!)
         val videoId = currentElement!!.videoId
         currentElement = null
@@ -167,6 +169,7 @@ class StreamWatcher(
         val thumbnail = tuple.t3
 
         println("Started with game ${game.gameId}")
+        jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${configuration.twitchUser}")
         val roleId = getRole("live")
         currentElement = StreamElement(game, 0, stream.streamId)
         return withPing(roleId) { mention ->
@@ -186,6 +189,7 @@ class StreamWatcher(
         timestamps.add(currentElement!!)
         return twitch.getGame(stream)
             .flatMap { game ->
+                jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${configuration.twitchUser}")
                 val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
                 currentElement = StreamElement(game, timestamp, stream.streamId)
                 Mono.zip(game.toMono(), twitch.getThumbnail(stream))

@@ -1,8 +1,11 @@
 @file:JvmName("Main")
 package strumbot
 
-import club.minnced.discord.webhook.WebhookClient
 import club.minnced.discord.webhook.WebhookClientBuilder
+import club.minnced.discord.webhook.send.WebhookEmbed
+import club.minnced.discord.webhook.send.WebhookEmbed.EmbedTitle
+import club.minnced.discord.webhook.send.WebhookEmbedBuilder
+import club.minnced.discord.webhook.send.WebhookMessageBuilder
 import club.minnced.jda.reactor.asMono
 import club.minnced.jda.reactor.createManager
 import club.minnced.jda.reactor.on
@@ -16,6 +19,7 @@ import reactor.core.publisher.Mono
 import reactor.core.publisher.toMono
 import reactor.core.scheduler.Schedulers
 import java.time.Duration.ofSeconds
+import java.time.format.DateTimeFormatter
 import java.util.EnumSet.noneOf
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool
@@ -27,6 +31,9 @@ private val pool = Executors.newScheduledThreadPool(ForkJoinPool.getCommonPoolPa
 
 private val poolScheduler = Schedulers.fromExecutor(pool)
 
+val rankByType: MutableMap<String, String> = mutableMapOf()
+
+// TODO: Add command for this?
 var shutdown = false
 
 fun streams(twitchApi: TwitchApi): Flux<Stream> {
@@ -84,7 +91,7 @@ fun main() {
                 it.channel.sendMessage("$mention I don't know that role!").asMono()
             }
         }
-        .onErrorContinue { t, _ -> t.printStackTrace() } //TODO: Use logger?
+        .onErrorContinue { t, _ -> t.printStackTrace() } // TODO: Use logger?
         .subscribe()
 
     val webhook = WebhookClientBuilder(configuration.webhookUrl)
@@ -93,17 +100,44 @@ fun main() {
         .setWait(false)
         .build()
 
+    // TODO: Make this a state machine (live -> update -> vod)
     streams(twitch)
         .flatMap {
             // Use the stream to fetch the game as well
-            Mono.zip(it.toMono(), twitch.getGame(it))
+            Mono.zip(it.toMono(), twitch.getGame(it), twitch.getThumbnail(it))
         }
         .flatMap {
-            val stream = it.t1 // unused for now but we need to use this when we finish this
+            val stream = it.t1
             val game = it.t2
-            // TODO: This should only be done once on startup, remember the id etc
-            val role = jda.getRolesByName("live", false).firstOrNull()?.asMention ?: ""
-            Mono.fromFuture { webhook.send("$role Elajjaz is live with ${game.name}") }
+            val thumbnail = it.t3
+
+            val role = rankByType.computeIfAbsent(stream.type) { type ->
+                jda.getRolesByName(type, true).firstOrNull()?.asMention ?: ""
+            }
+
+            Mono.fromFuture {
+                val embed = WebhookEmbedBuilder().let { builder ->
+                    builder.setTitle(EmbedTitle(stream.title, null))
+                    builder.setDescription("**[https://twitch.tv/elajjaz](https://twitch.tv/elajjaz)**")
+                    builder.addField(WebhookEmbed.EmbedField(
+                        true, "Playing", game.name
+                    ))
+                    builder.addField(WebhookEmbed.EmbedField(
+                        true, "Started At", stream.startedAt.format(DateTimeFormatter.RFC_1123_DATE_TIME)
+                    ))
+                    builder.setColor(0x6441A4)
+                    builder.setImageUrl("attachment://thumbnail.jpg")
+                    builder.build()
+                }
+
+                val message = WebhookMessageBuilder()
+                    .setContent("$role Elajjaz is live with ${game.name}")
+                    .addFile("thumbnail.jpg", thumbnail)
+                    .addEmbeds(embed)
+                    .build()
+
+                webhook.send(message)
+            }.publishOn(Schedulers.elastic())
         }
         .subscribe()
 }

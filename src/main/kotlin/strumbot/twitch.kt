@@ -4,7 +4,11 @@ import net.dv8tion.jda.api.utils.data.DataObject
 import okhttp3.*
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Scheduler
+import reactor.core.scheduler.Schedulers
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.IOException
+import java.io.InputStream
 import java.time.OffsetDateTime
 
 class HttpException(route: String, status: Int, meaning: String)
@@ -55,6 +59,7 @@ class TwitchApi(
                     stream.getString("game_id"),
                     stream.getString("title"),
                     stream.getString("type"),
+                    stream.getString("thumbnail_url"),
                     OffsetDateTime.parse(stream.getString("started_at"))
                 )
             }
@@ -81,11 +86,24 @@ class TwitchApi(
             }
         }
     }
+
+    fun getThumbnail(stream: Stream, width: Int = 1920, height: Int = 1080): Mono<InputStream> = Mono.defer {
+        val request = Request.Builder()
+            .url(stream.thumbnail.replace("{width}", width.toString()).replace("{height}", height.toString()))
+            .build()
+
+        makeRequest(request) { response ->
+            val buffer = ByteArrayOutputStream()
+            response.body()!!.byteStream().copyTo(buffer)
+            ByteArrayInputStream(buffer.toByteArray())
+        }.subscribeOn(Schedulers.elastic())
+    }
 }
 
 data class Stream(
     val gameId: String,
     val title: String,
     val type: String,
+    val thumbnail: String,
     val startedAt: OffsetDateTime)
 data class Game(val gameId: String, val name: String)

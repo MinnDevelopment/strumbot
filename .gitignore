@@ -1,0 +1,5 @@
+config.json
+build/
+.gradle/
+.idea/
+gradle.properties

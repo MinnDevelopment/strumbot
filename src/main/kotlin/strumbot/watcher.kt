@@ -4,6 +4,7 @@ import club.minnced.discord.webhook.WebhookClient
 import club.minnced.discord.webhook.WebhookClientBuilder
 import club.minnced.discord.webhook.receive.ReadonlyMessage
 import club.minnced.discord.webhook.send.WebhookEmbed
+import club.minnced.discord.webhook.send.WebhookEmbed.EmbedAuthor
 import club.minnced.discord.webhook.send.WebhookEmbed.EmbedTitle
 import club.minnced.discord.webhook.send.WebhookEmbedBuilder
 import club.minnced.discord.webhook.send.WebhookMessageBuilder
@@ -211,12 +212,10 @@ class StreamWatcher(
 
 private fun makeEmbedBase(title: String, twitchName: String): WebhookEmbedBuilder {
     val embed = WebhookEmbedBuilder()
-
     embed.setColor(0x6441A4)
-    embed.setDescription("**[https://twitch.tv/$twitchName](https://twitch.tv/$twitchName)**")
     embed.setImageUrl("attachment://thumbnail.jpg")
-    embed.setTitle(EmbedTitle(title, null))
-
+    embed.setTitle(EmbedTitle("https://twitch.tv/$twitchName", "https://twitch.tv/$twitchName"))
+    embed.setAuthor(EmbedAuthor(title, null, null))
     return embed
 }
 

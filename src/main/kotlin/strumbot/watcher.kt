@@ -36,9 +36,7 @@ class StreamWatcher(
 
     private fun getRole(type: String): String {
         if (type !in rankByType) {
-            val roleId = jda.getRolesByName(type, true).firstOrNull()?.id
-            if (roleId == null)
-                return "0"
+            val roleId = jda.getRolesByName(type, true).firstOrNull()?.id ?: return "0"
             rankByType[type] = roleId
         }
         return rankByType[type] ?: "0"
@@ -116,20 +114,22 @@ class StreamWatcher(
                 val thumbnail = tuple.t2
                 val embed = makeEmbedBase(video.title)
 
-                val index = timestamps.map {
-                    val twitchTimestamp = toTwitchTimestamp(it.timestamp)
-                    val url = "[$twitchTimestamp](${video.url}?t=$twitchTimestamp)"
-                    "${it.game.name} ($url)"
-                }.joinToString("\n")
+                val index = timestamps.joinToString("\n") {
+                    if (it.timestamp == 0) {
+                        "${it.game.name} ( [0:00:00](${video.url}) )"
+                    } else {
+                        val twitchTimestamp = toTwitchTimestamp(it.timestamp)
+                        val url = "[$twitchTimestamp](${video.url}?t=$twitchTimestamp)"
+                        "${it.game.name} ($url)"
+                    }
+                }
 
                 embed.addField(
                     WebhookEmbed.EmbedField(
-                    false, "Timestamps", index
+                    false, "Time Stamps", index
                 ))
 
                 val roleId = getRole("vod")
-
-
                 withPing(roleId) { mention ->
                     val message = WebhookMessageBuilder()
                         .setContent("$mention VOD [${video.duration}]")

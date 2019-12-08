@@ -4,6 +4,7 @@ package strumbot
 import club.minnced.jda.reactor.asMono
 import club.minnced.jda.reactor.createManager
 import club.minnced.jda.reactor.on
+import club.minnced.jda.reactor.then
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent
@@ -66,12 +67,17 @@ private fun setupRankListener(jda: JDA, configuration: Configuration) {
 
             // Check if role by that name exists
             val role = it.guild.getRolesByName(roleName, false).firstOrNull()
-            if (role != null) { //TODO: Toggle role
-                // Add the role to the member and send a success message
-                it.guild.addRoleToMember(member, role).asMono()
-                    .flatMap { _ ->
-                        it.channel.sendMessage("$mention, you joined **${role.name}.").asMono()
+            if (role != null) {
+                // Add/Remove the role to the member and send a success message
+                if (member.roles.any { it.idLong == role.idLong }) {
+                    it.guild.removeRoleFromMember(member, role).asMono().then {
+                        it.channel.sendMessage("$mention, you left **${role.name}**.").asMono()
                     }
+                } else {
+                    it.guild.addRoleToMember(member, role).asMono().then {
+                        it.channel.sendMessage("$mention, you joined **${role.name}**.").asMono()
+                    }
+                }
             } else {
                 // Send a failure message, unknown role
                 it.channel.sendMessage("$mention I don't know that role!").asMono()

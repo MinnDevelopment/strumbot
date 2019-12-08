@@ -36,6 +36,7 @@ class StreamWatcher(
     // TODO: Handle stream hickups (might go offline and back online within the 10 second window)
     @Volatile private var currentElement: StreamElement? = null
     private var offlineTimestamp = 0L
+    private var streamStarted = 0L
     private val rankByType: MutableMap<String, String> = mutableMapOf()
     private val timestamps: MutableList<StreamElement> = mutableListOf()
 
@@ -113,9 +114,9 @@ class StreamWatcher(
 
     private fun handleOffline(webhook: WebhookClient): Mono<ReadonlyMessage> {
         if (offlineTimestamp == 0L) {
-            offlineTimestamp = System.currentTimeMillis()
+            offlineTimestamp = OffsetDateTime.now().toEpochSecond()
             return Mono.empty()
-        } else if (System.currentTimeMillis() - offlineTimestamp < OFFLINE_DELAY) {
+        } else if (OffsetDateTime.now().toEpochSecond() - offlineTimestamp < OFFLINE_DELAY) {
             return Mono.empty()
         }
 
@@ -148,8 +149,9 @@ class StreamWatcher(
 
                 val roleId = getRole("vod")
                 withPing(roleId) { mention ->
+                    val duration = toTwitchTimestamp((offlineTimestamp - streamStarted).toInt())
                     val message = WebhookMessageBuilder()
-                        .setContent("$mention VOD [${video.duration}]")
+                        .setContent("$mention VOD [$duration]")
                         .setUsername("Stream Notifications")
                         .addEmbeds(embed.build())
                         .addFile("thumbnail", thumbnail)
@@ -170,6 +172,7 @@ class StreamWatcher(
 
         println("Started with game ${game.gameId}")
         jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${configuration.twitchUser}")
+        streamStarted = stream.startedAt.toEpochSecond()
         val roleId = getRole("live")
         currentElement = StreamElement(game, 0, stream.streamId)
         return withPing(roleId) { mention ->

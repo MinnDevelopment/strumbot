@@ -56,6 +56,7 @@ class TwitchApi(
             } else {
                 val stream = data.getObject(0)
                 Stream(
+                    stream.getString("id"),
                     stream.getString("game_id"),
                     stream.getString("title"),
                     stream.getString("type"),
@@ -87,7 +88,6 @@ class TwitchApi(
         }
     }
 
-
     fun getUserIdByLogin(login: String): Mono<String> = Mono.defer<String> {
         val request = Request.Builder()
             .addHeader("Client-Id", clientId)
@@ -101,6 +101,28 @@ class TwitchApi(
                 null
             else
                 data.getObject(0).getString("id")
+        }
+    }
+
+    fun getVideoById(id: String): Mono<Video> = Mono.defer<Video> {
+        val request = Request.Builder()
+            .addHeader("Client-Id", clientId)
+            .url("https://api.twitch.tv/helix/videos?id=$id")
+            .build()
+
+        makeRequest(request) { response ->
+            val json = DataObject.fromJson(response.body()!!.byteStream())
+            val data = json.getArray("data")
+            if (data.isEmpty)
+                null
+            else {
+                val video = data.getObject(0)
+                val url = video.getString("url")
+                val title = video.getString("title")
+                val duration = video.getString("duration")
+                val thumbnail = video.getString("thumbnail_url")
+                Video(url, title, duration, thumbnail)
+            }
         }
     }
 
@@ -129,8 +151,10 @@ class TwitchApi(
     fun getThumbnail(stream: Stream, width: Int = 1920, height: Int = 1080): Mono<InputStream> = getThumbnail(stream.thumbnail, width, height)
     fun getThumbnail(video: Video, width: Int = 1920, height: Int = 1080): Mono<InputStream> = getThumbnail(video.thumbnail, width, height)
     fun getThumbnail(url: String, width: Int, height: Int): Mono<InputStream> = Mono.defer<InputStream> {
+        val thumbnailUrl = url.replace("{width}", width.toString())
+                              .replace("{height}", height.toString()) + "?v=${System.currentTimeMillis()}" // add random number to avoid cache!
         val request = Request.Builder()
-            .url(url.replace("{width}", width.toString()).replace("{height}", height.toString()))
+            .url(thumbnailUrl)
             .build()
 
         makeRequest(request) { response ->
@@ -142,6 +166,7 @@ class TwitchApi(
 }
 
 data class Stream(
+    val streamId: String,
     val gameId: String,
     val title: String,
     val type: String,

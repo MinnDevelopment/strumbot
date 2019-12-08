@@ -13,10 +13,9 @@ import okhttp3.OkHttpClient
 import reactor.core.scheduler.Schedulers
 import java.util.EnumSet.noneOf
 import java.util.concurrent.Executors
-import java.util.concurrent.ForkJoinPool
 import kotlin.concurrent.thread
 
-private val pool = Executors.newScheduledThreadPool(ForkJoinPool.getCommonPoolParallelism() * 2) {
+private val pool = Executors.newScheduledThreadPool(2) {
     thread(start=false, name="Worker-Thread", isDaemon=true, block=it::run)
 }
 
@@ -48,6 +47,7 @@ fun main() {
 
     jda.awaitReady()
     StreamWatcher(twitch, jda, configuration).run(pool, poolScheduler)
+    StreamWatcher(twitch, jda, configuration.copy(twitchUser = "forsen")).run(pool, poolScheduler)
 }
 
 private fun setupRankListener(jda: JDA, configuration: Configuration) {

@@ -8,7 +8,8 @@ data class Configuration(
     val twitchClientId: String,
     val twitchClientSecret: String,
     val webhookUrl: String,
-    val ranks: List<String>
+    val ranks: List<String>,
+    val twitchUser: String
 )
 
 
@@ -22,6 +23,7 @@ fun loadConfiguration(path: String): Configuration {
         twitch.getString("client_id"),
         twitch.getString("client_secret"),
         discord.getString("webhook"),
-        discord.getArray("ranks").toList().map(Any::toString)
+        discord.getArray("ranks").toList().map(Any::toString),
+        twitch.getString("user_login")
     )
 }

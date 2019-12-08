@@ -95,11 +95,15 @@ fun main() {
 
     streams(twitch)
         .flatMap {
+            // Use the stream to fetch the game as well
             Mono.zip(it.toMono(), twitch.getGame(it))
         }
         .flatMap {
+            val stream = it.t1 // unused for now but we need to use this when we finish this
+            val game = it.t2
+            // TODO: This should only be done once on startup, remember the id etc
             val role = jda.getRolesByName("live", false).firstOrNull()?.asMention ?: ""
-            webhook.send("$role Elajjaz is live with ${it.t2.name}").toMono()
+            Mono.fromFuture { webhook.send("$role Elajjaz is live with ${game.name}") }
         }
         .subscribe()
 }

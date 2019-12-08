@@ -12,7 +12,6 @@ data class Configuration(
 )
 
 
-//TODO: Actually read this from a config
 fun loadConfiguration(path: String): Configuration {
     val json = DataObject.fromJson(File(path).reader())
     val discord = json.getObject("discord")

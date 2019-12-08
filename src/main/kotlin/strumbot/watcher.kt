@@ -3,9 +3,7 @@ package strumbot
 import club.minnced.discord.webhook.WebhookClient
 import club.minnced.discord.webhook.WebhookClientBuilder
 import club.minnced.discord.webhook.receive.ReadonlyMessage
-import club.minnced.discord.webhook.send.WebhookEmbed
-import club.minnced.discord.webhook.send.WebhookEmbed.EmbedAuthor
-import club.minnced.discord.webhook.send.WebhookEmbed.EmbedTitle
+import club.minnced.discord.webhook.send.WebhookEmbed.*
 import club.minnced.discord.webhook.send.WebhookEmbedBuilder
 import club.minnced.discord.webhook.send.WebhookMessageBuilder
 import club.minnced.jda.reactor.asMono
@@ -25,15 +23,18 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.concurrent.ScheduledExecutorService
 
-data class StreamElement(val game: Game, val timestamp: Int)
+const val OFFLINE_DELAY = 2L * 60L // 2 minutes
+
+data class StreamElement(val game: Game, val timestamp: Int, val videoId: String)
 
 class StreamWatcher(
     private val twitch: TwitchApi,
     private val jda: JDA,
     private val configuration: Configuration) {
 
-    private var currentId: String? = null
+    // TODO: Handle stream hickups (might go offline and back online within the 10 second window)
     @Volatile private var currentElement: StreamElement? = null
+    private var offlineTimestamp = 0L
     private val rankByType: MutableMap<String, String> = mutableMapOf()
     private val timestamps: MutableList<StreamElement> = mutableListOf()
 
@@ -60,6 +61,7 @@ class StreamWatcher(
                             handleOffline(webhook).then(Mono.empty())
                         }
                         .flatMap { stream ->
+                            offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                             if (stream.gameId != currentElement?.game?.gameId) {
                                 handleUpdate(stream, webhook)
                             } else {
@@ -73,6 +75,7 @@ class StreamWatcher(
                             Mono.zip(stream.toMono(), twitch.getGame(stream), twitch.getThumbnail(stream))
                         }
                         .flatMap { tuple ->
+                            offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                             handleGoLive(tuple, webhook)
                         }
                 }
@@ -91,7 +94,6 @@ class StreamWatcher(
             return block("<@&$roleId>")
         }
 
-
         return role.manager.setMentionable(true).asMono()
             .then { block("<@&$roleId>") }
             .flatMap { result ->
@@ -109,42 +111,38 @@ class StreamWatcher(
     }
 
     private fun handleOffline(webhook: WebhookClient): Mono<ReadonlyMessage> {
+        if (offlineTimestamp == 0L) {
+            offlineTimestamp = System.currentTimeMillis()
+            return Mono.empty()
+        } else if (System.currentTimeMillis() - offlineTimestamp < OFFLINE_DELAY) {
+            return Mono.empty()
+        }
+
         println("Stream went offline!")
         timestamps.add(currentElement!!)
+        val videoId = currentElement!!.videoId
         currentElement = null
         val timestamps = this.timestamps.toList()
         this.timestamps.clear()
 
-        val videoId = currentId ?: kotlin.run {
-            println("Missing current video id for vod links!")
-            return Mono.empty()
-        }
-
-        currentId = null
-
-        return twitch.getVideoById(videoId)
-            .flatMap {
-                Mono.zip(it.toMono(), twitch.getThumbnail(it))
-            }
-            .flatMap { tuple ->
-                val video = tuple.t1
-                val thumbnail = tuple.t2
-                val embed = makeEmbedBase(video.title, configuration.twitchUser)
-
-                val index = timestamps.joinToString("\n") {
-                    if (it.timestamp == 0) {
-                        "${it.game.name} ( [0:00:00](${video.url}) )"
-                    } else {
-                        val twitchTimestamp = toTwitchTimestamp(it.timestamp)
-                        val url = "[$twitchTimestamp](${video.url}?t=$twitchTimestamp)"
-                        "${it.game.name} ($url)"
-                    }
+        return Flux.fromIterable(timestamps)
+            .map {
+                val url = "https://www.twitch.tv/videos/${it.videoId}"
+                if (it.timestamp == 0) "${it.game.name} ( [0:00:00]($url) )"
+                else {
+                    val twitchTimestamp = toTwitchTimestamp(it.timestamp)
+                    "${it.game.name} ( [$twitchTimestamp](${url}?t=$twitchTimestamp) )"
                 }
-
-                embed.addField(
-                    WebhookEmbed.EmbedField(
-                    false, "Time Stamps", index
-                ))
+            }
+            .reduce(StringBuilder()) { a, b -> a.append("\n").append(b) }
+            .flatMap { Mono.zip(it.toMono(), twitch.getVideoById(videoId)) }
+            .flatMap { Mono.zip(it.t1.toMono(), it.t2.toMono(), twitch.getThumbnail(it.t2)) }
+            .flatMap {
+                val index = it.t1
+                val video = it.t2
+                val thumbnail = it.t3
+                val embed = makeEmbedBase(video.title, configuration.twitchUser)
+                embed.addField(EmbedField(false, "Time Stamps", index.toString()))
 
                 val roleId = getRole("vod")
                 withPing(roleId) { mention ->
@@ -168,12 +166,9 @@ class StreamWatcher(
         val game = tuple.t2
         val thumbnail = tuple.t3
 
-        // Update current id for vod link later
-        currentId = stream.streamId
-
         println("Started with game ${game.gameId}")
         val roleId = getRole("live")
-        currentElement = StreamElement(game, 0)
+        currentElement = StreamElement(game, 0, stream.streamId)
         return withPing(roleId) { mention ->
             val embed = makeEmbed(stream, game, thumbnail, configuration.twitchUser)
                 .setContent("$mention ${configuration.twitchUser} is live with ${game.name}!")
@@ -192,7 +187,7 @@ class StreamWatcher(
         return twitch.getGame(stream)
             .flatMap { game ->
                 val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
-                currentElement = StreamElement(game, timestamp)
+                currentElement = StreamElement(game, timestamp, stream.streamId)
                 Mono.zip(game.toMono(), twitch.getThumbnail(stream))
             }
             .flatMap { tuple ->
@@ -227,12 +222,12 @@ private fun makeEmbed(
 ): WebhookMessageBuilder {
     val embed = makeEmbedBase(stream.title, twitchName).let { builder ->
         builder.addField(
-            WebhookEmbed.EmbedField(
+            EmbedField(
                 true, "Playing", game.name
             )
         )
         builder.addField(
-            WebhookEmbed.EmbedField(
+            EmbedField(
                 true, "Started At", stream.startedAt.format(DateTimeFormatter.RFC_1123_DATE_TIME)
             )
         )

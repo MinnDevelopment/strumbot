@@ -47,7 +47,6 @@ fun main() {
 
     jda.awaitReady()
     StreamWatcher(twitch, jda, configuration).run(pool, poolScheduler)
-    StreamWatcher(twitch, jda, configuration.copy(twitchUser = "forsen")).run(pool, poolScheduler)
 }
 
 private fun setupRankListener(jda: JDA, configuration: Configuration) {

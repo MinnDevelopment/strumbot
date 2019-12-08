@@ -47,7 +47,7 @@ fun main() {
     setupRankListener(jda, configuration)
 
     jda.awaitReady()
-    StreamWatcher(twitch, jda, configuration).run(pool)
+    StreamWatcher(twitch, jda, configuration).run(pool, poolScheduler)
 }
 
 private fun setupRankListener(jda: JDA, configuration: Configuration) {

@@ -4,8 +4,8 @@ import club.minnced.discord.webhook.WebhookClient
 import club.minnced.discord.webhook.WebhookClientBuilder
 import club.minnced.discord.webhook.receive.ReadonlyMessage
 import club.minnced.discord.webhook.send.WebhookEmbed
+import club.minnced.discord.webhook.send.WebhookEmbed.EmbedTitle
 import club.minnced.discord.webhook.send.WebhookEmbedBuilder
-import club.minnced.discord.webhook.send.WebhookMessage
 import club.minnced.discord.webhook.send.WebhookMessageBuilder
 import club.minnced.jda.reactor.asMono
 import club.minnced.jda.reactor.then
@@ -14,6 +14,7 @@ import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.publisher.switchIfEmpty
 import reactor.core.publisher.toMono
+import reactor.core.scheduler.Scheduler
 import reactor.util.function.Tuple3
 import java.io.InputStream
 import java.time.Duration
@@ -24,12 +25,16 @@ import java.util.concurrent.ScheduledExecutorService
 
 data class StreamElement(val game: Game, val timestamp: Int)
 
-class StreamWatcher(val twitch: TwitchApi, val jda: JDA, val configuration: Configuration) {
-    @Volatile var currentElement: StreamElement? = null
-    val rankByType: MutableMap<String, String> = mutableMapOf()
-    val timestamps: MutableList<StreamElement> = mutableListOf()
+class StreamWatcher(
+    private val twitch: TwitchApi,
+    private val jda: JDA,
+    private val configuration: Configuration) {
 
-    fun getRole(type: String): String {
+    @Volatile private var currentElement: StreamElement? = null
+    private val rankByType: MutableMap<String, String> = mutableMapOf()
+    private val timestamps: MutableList<StreamElement> = mutableListOf()
+
+    private fun getRole(type: String): String {
         if (type !in rankByType) {
             val roleId = jda.getRolesByName(type, true).firstOrNull()?.id
             if (roleId == null)
@@ -39,7 +44,7 @@ class StreamWatcher(val twitch: TwitchApi, val jda: JDA, val configuration: Conf
         return rankByType[type] ?: "0"
     }
 
-    fun run(pool: ScheduledExecutorService) {
+    fun run(pool: ScheduledExecutorService, scheduler: Scheduler) {
         val webhook = WebhookClientBuilder(configuration.webhookUrl)
             .setExecutorService(pool)
             .setHttpClient(jda.httpClient)
@@ -51,7 +56,7 @@ class StreamWatcher(val twitch: TwitchApi, val jda: JDA, val configuration: Conf
                 if (currentElement != null) {
                     twitch.getStreamByLogin("elajjaz")
                         .switchIfEmpty {
-                            handleOffline()
+                            handleOffline(webhook).then(Mono.empty())
                         }
                         .flatMap { stream ->
                             if (stream.gameId != currentElement?.game?.gameId) {
@@ -71,6 +76,7 @@ class StreamWatcher(val twitch: TwitchApi, val jda: JDA, val configuration: Conf
                         }
                 }
             }
+            .publishOn(scheduler)
             .subscribe()
     }
 
@@ -85,13 +91,56 @@ class StreamWatcher(val twitch: TwitchApi, val jda: JDA, val configuration: Conf
             }
     }
 
-    private fun handleOffline(): Mono<Stream> {
+    private fun toTwitchTimestamp(timestamp: Int): String {
+        val duration = Duration.ofSeconds(timestamp.toLong())
+        val hours = duration.toHours()
+        val minutes = duration.minusHours(hours).toMinutes()
+        val seconds = duration.minusHours(hours).minusMinutes(minutes).toSeconds()
+        return String.format("%02dh%02dm%02ds", hours, minutes, seconds)
+    }
+
+    private fun handleOffline(webhook: WebhookClient): Mono<Void> {
         println("Stream went offline!")
         timestamps.add(currentElement!!)
         currentElement = null
-        //TODO: Handle stream goes offline (vod list)
-        timestamps.clear()
-        return Mono.empty() //TODO: Stream went offline!
+        val timestamps = this.timestamps.toList()
+        this.timestamps.clear()
+
+        return twitch.getUserIdByLogin("elajjaz")
+            .flatMap(twitch::getLatestBroadcastByUser)
+            .flatMap {
+                Mono.zip(it.toMono(), twitch.getThumbnail(it))
+            }
+            .flatMap { tuple ->
+                val video = tuple.t1
+                val thumbnail = tuple.t2
+                val embed = makeEmbedBase(video.title)
+
+                val index = timestamps.map {
+                    val twitchTimestamp = toTwitchTimestamp(it.timestamp)
+                    val url = "[$twitchTimestamp](${video.url}?t=$twitchTimestamp)"
+                    "${it.game.name} ($url)"
+                }.joinToString("\n")
+
+                embed.addField(
+                    WebhookEmbed.EmbedField(
+                    false, "Timestamps", index
+                ))
+
+                val roleId = getRole("vod")
+
+
+                withPing(roleId) { mention ->
+                    val message = WebhookMessageBuilder()
+                        .setContent("$mention VOD [${video.duration}]")
+                        .addEmbeds(embed.build())
+                        .addFile("thumbnail", thumbnail)
+                        .build()
+
+                    Mono.fromFuture { webhook.send(message) }
+                }
+            }
+            .then()
     }
 
     private fun handleGoLive(
@@ -106,7 +155,9 @@ class StreamWatcher(val twitch: TwitchApi, val jda: JDA, val configuration: Conf
         val roleId = getRole("live")
         currentElement = StreamElement(game, 0)
         return withPing(roleId) { mention ->
-            val embed = makeEmbed(stream, game, mention, thumbnail)
+            val embed = makeEmbed(stream, game, thumbnail)
+                .setContent("$mention Elajjaz is live with ${game.name}!")
+                .build()
             Mono.fromFuture { webhook.send(embed) }
         }
     }
@@ -127,24 +178,33 @@ class StreamWatcher(val twitch: TwitchApi, val jda: JDA, val configuration: Conf
                 val game = tuple.t1
                 val thumbnail = tuple.t2
                 val roleId = getRole("update")
-                //TODO: Change message for game switched
                 withPing(roleId) { mention ->
-                    val embed = makeEmbed(stream, game, mention, thumbnail)
+                    val embed = makeEmbed(stream, game, thumbnail)
+                        .setContent("$mention Elajjaz switched game to ${game.name}!")
+                        .build()
                     Mono.fromFuture { webhook.send(embed) }
                 }
             }
     }
 }
 
+private fun makeEmbedBase(title: String): WebhookEmbedBuilder {
+    val embed = WebhookEmbedBuilder()
+
+    embed.setColor(0x6441A4)
+    embed.setDescription("**[https://twitch.tv/elajjaz](https://twitch.tv/elajjaz)**")
+    embed.setImageUrl("attachment://thumbnail.jpg")
+    embed.setTitle(EmbedTitle(title, null))
+
+    return embed
+}
+
 private fun makeEmbed(
     stream: Stream,
     game: Game,
-    role: String,
     thumbnail: InputStream
-): WebhookMessage {
-    val embed = WebhookEmbedBuilder().let { builder ->
-        builder.setTitle(WebhookEmbed.EmbedTitle(stream.title, null))
-        builder.setDescription("**[https://twitch.tv/elajjaz](https://twitch.tv/elajjaz)**")
+): WebhookMessageBuilder {
+    val embed = makeEmbedBase(stream.title).let { builder ->
         builder.addField(
             WebhookEmbed.EmbedField(
                 true, "Playing", game.name
@@ -155,14 +215,10 @@ private fun makeEmbed(
                 true, "Started At", stream.startedAt.format(DateTimeFormatter.RFC_1123_DATE_TIME)
             )
         )
-        builder.setColor(0x6441A4)
-        builder.setImageUrl("attachment://thumbnail.jpg")
         builder.build()
     }
 
     return WebhookMessageBuilder()
-        .setContent("$role Elajjaz is live with ${game.name}")
         .addFile("thumbnail.jpg", thumbnail)
         .addEmbeds(embed)
-        .build()
 }

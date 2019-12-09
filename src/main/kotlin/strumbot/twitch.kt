@@ -15,10 +15,10 @@ class HttpException(route: String, status: Int, meaning: String)
     : Exception("$route > $status: $meaning")
 
 class TwitchApi(
-    val http: OkHttpClient,
-    val scheduler: Scheduler,
-    val clientId: String,
-    val clientSecret: String) {
+    private val http: OkHttpClient,
+    private val scheduler: Scheduler,
+    private val clientId: String,
+    private val clientSecret: String) {
 
     private fun <T> makeRequest(request: Request, handler: (Response) -> T?): Mono<T> = Mono.create<T> { sink ->
         http.newCall(request).enqueue(object : Callback {

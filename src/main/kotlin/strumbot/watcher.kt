@@ -162,7 +162,7 @@ class StreamWatcher(
                         .setContent("$mention VOD [$duration]")
                         .setUsername("Stream Notifications")
                         .addEmbeds(embed.build())
-                        .addFile("thumbnail", thumbnail)
+                        .addFile("thumbnail.jgp", thumbnail)
                         .build()
 
                     Mono.fromFuture { webhook.send(message) }
@@ -186,7 +186,7 @@ class StreamWatcher(
         currentElement = StreamElement(game, 0, videoId)
         return withPing(roleId) { mention ->
             val embed = makeEmbed(stream, game, thumbnail, configuration.twitchUser)
-                .setContent("$mention ${configuration.twitchUser} is live with ${game.name}!")
+                .setContent("$mention ${configuration.twitchUser} is live with **${game.name}**!")
                 .setUsername("Stream Notifications")
                 .build()
             Mono.fromFuture { webhook.send(embed) }
@@ -213,7 +213,7 @@ class StreamWatcher(
                 val roleId = getRole("update")
                 withPing(roleId) { mention ->
                     val embed = makeEmbed(stream, game, thumbnail, configuration.twitchUser)
-                        .setContent("$mention ${configuration.twitchUser} switched game to ${game.name}!")
+                        .setContent("$mention ${configuration.twitchUser} switched game to **${game.name}**!")
                         .setUsername("Stream Notifications")
                         .build()
                     Mono.fromFuture { webhook.send(embed) }

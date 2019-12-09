@@ -13,6 +13,7 @@ import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.Activity
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import reactor.core.Exceptions
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.publisher.switchIfEmpty
@@ -20,6 +21,9 @@ import reactor.core.publisher.toMono
 import reactor.core.scheduler.Scheduler
 import reactor.util.function.Tuple4
 import java.io.InputStream
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.time.Duration
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
@@ -29,6 +33,12 @@ import java.util.concurrent.ScheduledExecutorService
 private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
 const val OFFLINE_DELAY = 2L * 60L // 2 minutes
 const val HOOK_NAME = "Stream Notifications"
+
+private val ignoredErrors = setOf<Class<*>>(
+    SocketException::class.java,              // Issues on socket creation
+    SocketTimeoutException::class.java,       // Timeouts
+    UnknownHostException::class.java          // DNS errors
+)
 
 data class StreamElement(val game: Game, val timestamp: Int, val videoId: String)
 
@@ -52,13 +62,14 @@ class StreamWatcher(
     }
 
     fun run(pool: ScheduledExecutorService, scheduler: Scheduler) {
+        log.info("Listening for stream from ${configuration.twitchUser}")
         val webhook = WebhookClientBuilder(configuration.webhookUrl)
             .setExecutorService(pool)
             .setHttpClient(jda.httpClient)
             .setWait(true)
             .build()
 
-        Flux.interval(Duration.ofSeconds(0), Duration.ofSeconds(10))
+        Flux.interval(Duration.ofSeconds(0), Duration.ofSeconds(10), scheduler)
             .flatMap {
                 if (currentElement != null) {
                     twitch.getStreamByLogin(configuration.twitchUser)
@@ -91,9 +102,10 @@ class StreamWatcher(
                         }
                 }
             }
+            .retry(Exceptions::isOverflow) // re-subscribe on overflow (fell behind on requests due to internet issues maybe)
+            .retry { it::class.java in ignoredErrors } // re-subscribe on internet issues
             .onErrorContinue { t, _ -> log.error("Error in twitch stream service", t) }
             .doOnEach { System.gc() }
-            .publishOn(scheduler)
             .subscribe()
     }
 
@@ -141,11 +153,8 @@ class StreamWatcher(
         return Flux.fromIterable(timestamps)
             .map {
                 val url = "https://www.twitch.tv/videos/${it.videoId}"
-                if (it.timestamp == 0) "${it.game.name} ( [0:00:00]($url) )"
-                else {
-                    val twitchTimestamp = toTwitchTimestamp(it.timestamp)
-                    "${it.game.name} ( [$twitchTimestamp](${url}?t=$twitchTimestamp) )"
-                }
+                val twitchTimestamp = toTwitchTimestamp(it.timestamp)
+                "${it.game.name} ( [$twitchTimestamp](${url}?t=$twitchTimestamp) )"
             }
             .reduce(StringBuilder()) { a, b -> a.append("\n").append(b) }
             .flatMap { Mono.zip(it.toMono(), twitch.getVideoById(videoId)) }
@@ -182,7 +191,7 @@ class StreamWatcher(
         val videoId = tuple.t3
         val thumbnail = tuple.t4
 
-        log.info("Stream started with game ${game.gameId}")
+        log.info("Stream started with game ${game.name} (${game.gameId})")
         jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${configuration.twitchUser}")
         streamStarted = stream.startedAt.toEpochSecond()
         val roleId = getRole("live")

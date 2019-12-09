@@ -1,10 +1,10 @@
 package strumbot
 
+import club.minnced.jda.reactor.toMono
 import net.dv8tion.jda.api.utils.data.DataObject
 import okhttp3.*
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Scheduler
-import reactor.core.scheduler.Schedulers
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -19,6 +19,8 @@ class TwitchApi(
     private val scheduler: Scheduler,
     private val clientId: String,
     private val clientSecret: String) {
+
+    private val games = FixedSizeMap<String, Game>(10)
 
     private fun <T> makeRequest(request: Request, handler: (Response) -> T?): Mono<T> = Mono.create<T> { sink ->
         http.newCall(request).enqueue(object : Callback {
@@ -69,6 +71,10 @@ class TwitchApi(
     }
 
     fun getGame(stream: Stream): Mono<Game> = Mono.defer<Game> {
+        if (stream.gameId in games) {
+            return@defer games[stream.gameId].toMono()
+        }
+
         val request = Request.Builder()
             .addHeader("Client-ID", clientId)
             .url("https://api.twitch.tv/helix/games?id=${stream.gameId}")
@@ -81,10 +87,12 @@ class TwitchApi(
                 null
             } else {
                 val game = data.getObject(0)
-                Game(
-                    game.getString("id"),
-                    game.getString("name")
-                )
+                games.computeIfAbsent(stream.gameId) {
+                    Game(
+                        game.getString("id"),
+                        game.getString("name")
+                    )
+                }
             }
         }
     }
@@ -137,9 +145,8 @@ class TwitchApi(
             val id = video.getString("id")
             val url = video.getString("url")
             val title = video.getString("title")
-            val duration = video.getString("duration")
             val thumbnail = video.getString("thumbnail_url")
-            Video(id, url, title, duration, thumbnail)
+            Video(id, url, title, thumbnail)
         }
     }
 
@@ -157,7 +164,7 @@ class TwitchApi(
             val buffer = ByteArrayOutputStream()
             response.body()!!.byteStream().copyTo(buffer)
             ByteArrayInputStream(buffer.toByteArray())
-        }.subscribeOn(Schedulers.elastic())
+        }
     }
 }
 
@@ -173,6 +180,5 @@ data class Video(
     val id: String,
     val url: String,
     val title: String,
-    val duration: String,
     val thumbnail: String)
 data class Game(val gameId: String, val name: String)

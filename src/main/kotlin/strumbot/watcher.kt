@@ -28,6 +28,7 @@ import java.util.concurrent.ScheduledExecutorService
 
 private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
 const val OFFLINE_DELAY = 2L * 60L // 2 minutes
+const val HOOK_NAME = "Stream Notifications"
 
 data class StreamElement(val game: Game, val timestamp: Int, val videoId: String)
 
@@ -134,6 +135,7 @@ class StreamWatcher(
         val videoId = currentElement!!.videoId
         currentElement = null
         val timestamps = this.timestamps.toList()
+        val firstSegment = timestamps.first()
         this.timestamps.clear()
 
         return Flux.fromIterable(timestamps)
@@ -152,7 +154,8 @@ class StreamWatcher(
                 val index = it.t1
                 val video = it.t2
                 val thumbnail = it.t3
-                val embed = makeEmbedBase(video.title, configuration.twitchUser)
+                val videoUrl = "https://www.twitch.tv/videos/${firstSegment.videoId}"
+                val embed = makeEmbedBase(video.title, videoUrl)
                 embed.addField(EmbedField(false, "Time Stamps", index.toString()))
 
                 val roleId = getRole("vod")
@@ -160,9 +163,9 @@ class StreamWatcher(
                     val duration = toTwitchTimestamp((offlineTimestamp - streamStarted).toInt())
                     val message = WebhookMessageBuilder()
                         .setContent("$mention VOD [$duration]")
-                        .setUsername("Stream Notifications")
+                        .setUsername(HOOK_NAME)
                         .addEmbeds(embed.build())
-                        .addFile("thumbnail.jgp", thumbnail)
+                        .addFile("thumbnail.jpg", thumbnail)
                         .build()
 
                     Mono.fromFuture { webhook.send(message) }
@@ -187,7 +190,7 @@ class StreamWatcher(
         return withPing(roleId) { mention ->
             val embed = makeEmbed(stream, game, thumbnail, configuration.twitchUser)
                 .setContent("$mention ${configuration.twitchUser} is live with **${game.name}**!")
-                .setUsername("Stream Notifications")
+                .setUsername(HOOK_NAME)
                 .build()
             Mono.fromFuture { webhook.send(embed) }
         }
@@ -214,7 +217,7 @@ class StreamWatcher(
                 withPing(roleId) { mention ->
                     val embed = makeEmbed(stream, game, thumbnail, configuration.twitchUser)
                         .setContent("$mention ${configuration.twitchUser} switched game to **${game.name}**!")
-                        .setUsername("Stream Notifications")
+                        .setUsername(HOOK_NAME)
                         .build()
                     Mono.fromFuture { webhook.send(embed) }
                 }
@@ -222,11 +225,11 @@ class StreamWatcher(
     }
 }
 
-private fun makeEmbedBase(title: String, twitchName: String): WebhookEmbedBuilder {
+private fun makeEmbedBase(title: String, url: String): WebhookEmbedBuilder {
     val embed = WebhookEmbedBuilder()
     embed.setColor(0x6441A4)
     embed.setImageUrl("attachment://thumbnail.jpg")
-    embed.setTitle(EmbedTitle("https://twitch.tv/$twitchName", "https://twitch.tv/$twitchName"))
+    embed.setTitle(EmbedTitle(url, url))
     embed.setAuthor(EmbedAuthor(title, null, null))
     return embed
 }
@@ -237,7 +240,7 @@ private fun makeEmbed(
     thumbnail: InputStream,
     twitchName: String
 ): WebhookMessageBuilder {
-    val embed = makeEmbedBase(stream.title, twitchName).let { builder ->
+    val embed = makeEmbedBase(stream.title, "https://www.twitch.tv/$twitchName").let { builder ->
         builder.addField(
             EmbedField(
                 true, "Playing", game.name

@@ -40,7 +40,7 @@ class TwitchApi(
                 }
             }
         })
-    }.subscribeOn(scheduler)
+    }.publishOn(scheduler)
 
     fun getStreamByLogin(login: String): Mono<Stream> = Mono.defer<Stream> {
         val request = Request.Builder()

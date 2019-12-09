@@ -146,8 +146,9 @@ class TwitchApi(
     fun getThumbnail(stream: Stream, width: Int = 1920, height: Int = 1080): Mono<InputStream> = getThumbnail(stream.thumbnail, width, height)
     fun getThumbnail(video: Video, width: Int = 1920, height: Int = 1080): Mono<InputStream> = getThumbnail(video.thumbnail, width, height)
     fun getThumbnail(url: String, width: Int, height: Int): Mono<InputStream> = Mono.defer<InputStream> {
-        val thumbnailUrl = url.replace("{width}", width.toString())
-                              .replace("{height}", height.toString()) + "?v=${System.currentTimeMillis()}" // add random number to avoid cache!
+        // Stream url uses {width} and video url uses %{width} ??????????????? OK TWITCH ???????????
+        val thumbnailUrl = url.replace(Regex("%?\\{width}"), width.toString())
+                              .replace(Regex("%?\\{height}"), height.toString()) + "?v=${System.currentTimeMillis()}" // add random number to avoid cache!
         val request = Request.Builder()
             .url(thumbnailUrl)
             .build()

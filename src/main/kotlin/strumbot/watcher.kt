@@ -63,7 +63,7 @@ class StreamWatcher(
 
     fun run(pool: ScheduledExecutorService, scheduler: Scheduler) {
         log.info("Listening for stream from ${configuration.twitchUser}")
-        val webhook = WebhookClientBuilder(configuration.webhookUrl)
+        val webhook = WebhookClientBuilder(configuration.streamNotifications)
             .setExecutorService(pool)
             .setHttpClient(jda.httpClient)
             .setWait(true)
@@ -78,8 +78,7 @@ class StreamWatcher(
                         }
                         .flatMap { Mono.zip(it.toMono(), twitch.getLatestBroadcastByUser(it.userId).map(Video::id)) }
                         .flatMap { tuple ->
-                            val stream = tuple.t1
-                            val videoId = tuple.t2
+                            val (stream, videoId) = tuple
                             offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                             if (stream.gameId != currentElement?.game?.gameId) {
                                 handleUpdate(stream, videoId, webhook)
@@ -106,6 +105,7 @@ class StreamWatcher(
             .retry { it::class.java in ignoredErrors } // re-subscribe on internet issues
             .onErrorContinue { t, _ -> log.error("Error in twitch stream service", t) }
             .doOnEach { System.gc() }
+            .doFinally { log.warn("Twitch service terminated unexpectedly with signal {}", it) }
             .subscribe()
     }
 
@@ -160,9 +160,7 @@ class StreamWatcher(
             .flatMap { Mono.zip(it.toMono(), twitch.getVideoById(videoId)) }
             .flatMap { Mono.zip(it.t1.toMono(), it.t2.toMono(), twitch.getThumbnail(it.t2)) }
             .flatMap {
-                val index = it.t1
-                val video = it.t2
-                val thumbnail = it.t3
+                val (index, video, thumbnail) = it
                 val videoUrl = "https://www.twitch.tv/videos/${firstSegment.videoId}"
                 val embed = makeEmbedBase(video.title, videoUrl)
                 embed.addField(EmbedField(false, "Time Stamps", index.toString()))
@@ -186,10 +184,7 @@ class StreamWatcher(
         tuple: Tuple4<Stream, Game, String, InputStream>,
         webhook: WebhookClient
     ): Mono<ReadonlyMessage> {
-        val stream = tuple.t1
-        val game = tuple.t2
-        val videoId = tuple.t3
-        val thumbnail = tuple.t4
+        val (stream, game, videoId, thumbnail) = tuple
 
         log.info("Stream started with game ${game.name} (${game.gameId})")
         jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${configuration.twitchUser}")
@@ -220,8 +215,7 @@ class StreamWatcher(
                 Mono.zip(game.toMono(), twitch.getThumbnail(stream))
             }
             .flatMap { tuple ->
-                val game = tuple.t1
-                val thumbnail = tuple.t2
+                val (game, thumbnail) = tuple
                 val roleId = getRole("update")
                 withPing(roleId) { mention ->
                     val embed = makeEmbed(stream, game, thumbnail, configuration.twitchUser)

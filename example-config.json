@@ -1,7 +1,8 @@
 {
   "discord": {
     "token": "NjUzMjM1MjY5MzM1NjQ2MjA4.*******.*******",
-    "webhook": "https://discordapp.com/api/webhooks/*******/******",
+    "stream_notifications": "https://discordapp.com/api/webhooks/*******/******",
+    "message_logs": "https://discordapp.com/api/webhooks/*******/****** (optional)",
     "ranks": ["live", "vod", "update"]
   },
   "twitch": {

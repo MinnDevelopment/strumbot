@@ -48,6 +48,10 @@ fun main() {
         .build()
 
     setupRankListener(jda, configuration)
+    // Optional message logging
+    configuration.messageLogs?.let { messageWebhook ->
+        MessageLogger(messageWebhook, pool, jda)
+    }
 
     jda.awaitReady()
     StreamWatcher(twitch, jda, configuration).run(pool, poolScheduler)

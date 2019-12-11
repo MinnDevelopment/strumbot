@@ -1,7 +1,4 @@
 [example-config]: https://github.com/MinnDevelopment/strumbot/blob/master/example-config.json
-[live-event]: https://raw.githubusercontent.com/MinnDevelopment/Strumbot/master/assets/readme/live-event.png
-[update-event]: https://raw.githubusercontent.com/MinnDevelopment/Strumbot/master/assets/readme/update-event.png
-[vod-event]: https://raw.githubusercontent.com/MinnDevelopment/Strumbot/master/assets/readme/vod-event.png
 
 # Strumbot
 
@@ -67,18 +64,3 @@ This configuration section contains required information to track the stream sta
 ## Setup
 
 TODO
-
-## Images
-
-1. Stream Live
-
-    ![][live-event]
-
-2. Stream Game Update
-
-    ![][update-event]
-
-3. Stream Offline
-
-    ![][vod-event]
-

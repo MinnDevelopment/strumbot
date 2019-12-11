@@ -85,7 +85,7 @@ class StreamWatcher(
                         .switchIfEmpty {
                             handleOffline(webhook).then(Mono.empty())
                         }
-                        .flatMap { Mono.zip(it.toMono(), twitch.getLatestBroadcastByUser(it.userId).map(Video::id)) }
+                        .flatMap { Mono.zip(it.toMono(), twitch.getVideoByStream(it).map(Video::id)) }
                         .flatMap { tuple ->
                             val (stream, videoId) = tuple
                             offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
@@ -101,7 +101,7 @@ class StreamWatcher(
                         .flatMap { stream ->
                             Mono.zip(stream.toMono(),
                                 twitch.getGame(stream),
-                                twitch.getLatestBroadcastByUser(stream.userId).map(Video::id),
+                                twitch.getVideoByStream(stream).map(Video::id),
                                 twitch.getThumbnail(stream))
                         }
                         .flatMap { tuple ->

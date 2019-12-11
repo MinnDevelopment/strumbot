@@ -17,6 +17,7 @@
 package strumbot
 
 import club.minnced.jda.reactor.toMono
+import net.dv8tion.jda.api.utils.data.DataArray
 import net.dv8tion.jda.api.utils.data.DataObject
 import okhttp3.*
 import reactor.core.publisher.Mono
@@ -67,8 +68,7 @@ class TwitchApi(
             .build()
 
         makeRequest(request) { response ->
-            val json = DataObject.fromJson(response.body()!!.byteStream())
-            val data = json.getArray("data")
+            val data = body(response)
             if (data.isEmpty) {
                 null
             } else {
@@ -97,8 +97,7 @@ class TwitchApi(
             .build()
 
         makeRequest(request) { response ->
-            val json = DataObject.fromJson(response.body()!!.byteStream())
-            val data = json.getArray("data")
+            val data = body(response)
             if (data.isEmpty) {
                 null
             } else {
@@ -120,8 +119,7 @@ class TwitchApi(
             .build()
 
         makeRequest(request) { response ->
-            val json = DataObject.fromJson(response.body()!!.byteStream())
-            val data = json.getArray("data")
+            val data = body(response)
             if (data.isEmpty)
                 null
             else
@@ -140,29 +138,25 @@ class TwitchApi(
         }
     }
 
-    fun getLatestBroadcastByUser(userId: String): Mono<Video> = Mono.defer<Video> {
+    fun getVideoByStream(stream: Stream): Mono<Video> = Mono.defer<Video> {
+        val userId = stream.userId
         val request = Request.Builder()
             .addHeader("Client-Id", clientId)
             .url("https://api.twitch.tv/helix/videos?user_id=$userId")
             .build()
 
         makeRequest(request) { response ->
-            handleVideo(response)
-        }
-    }
+            val data = body(response)
 
-    private fun handleVideo(response: Response): Video? {
-        val json = DataObject.fromJson(response.body()!!.byteStream())
-        val data = json.getArray("data")
-        return if (data.isEmpty)
-            null
-        else {
-            val video = data.getObject(0)
-            val id = video.getString("id")
-            val url = video.getString("url")
-            val title = video.getString("title")
-            val thumbnail = video.getString("thumbnail_url")
-            Video(id, url, title, thumbnail)
+            repeat(data.length()) { i ->
+                val video = data.getObject(i)
+                val type = video.getString("type")
+                // Stream vods are always type archive (other types are highlight and upload)
+                if (type == "archive") {
+                    return@makeRequest buildVideo(video)
+                }
+            }
+            return@makeRequest null
         }
     }
 
@@ -181,6 +175,29 @@ class TwitchApi(
             response.body()!!.byteStream().copyTo(buffer)
             ByteArrayInputStream(buffer.toByteArray())
         }
+    }
+
+    private fun handleVideo(response: Response): Video? {
+        val data = body(response)
+        return if (data.isEmpty)
+            null
+        else {
+            val video = data.getObject(0)
+            buildVideo(video)
+        }
+    }
+
+    private fun body(response: Response): DataArray {
+        val json = DataObject.fromJson(response.body()!!.byteStream())
+        return json.getArray("data")
+    }
+
+    private fun buildVideo(video: DataObject): Video {
+        val id = video.getString("id")
+        val url = video.getString("url")
+        val title = video.getString("title")
+        val thumbnail = video.getString("thumbnail_url")
+        return Video(id, url, title, thumbnail)
     }
 }
 

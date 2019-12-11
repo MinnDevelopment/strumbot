@@ -2,6 +2,11 @@
 
 A Twitch Stream Notification Bot. This will send notifications to a webhook in your Discord server when the subscribed streamer goes live or changes their game.
 
+## Requirements
+
+- JDK 1.8 or better
+- Stable Internet
+
 ## Configurations
 
 The configuration file must be called `config.json` and has to be in the working directory. An example configuration can be found in `example-config.json`.

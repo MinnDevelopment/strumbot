@@ -69,15 +69,6 @@ class StreamWatcher(
     private val rankByType: MutableMap<String, String> = mutableMapOf()
     private val timestamps: MutableList<StreamElement> = mutableListOf()
 
-    private fun getRole(type: String): String {
-        val roleName = configuration.ranks[type] ?: "0"
-        if (type !in rankByType) {
-            val roleId = jda.getRolesByName(roleName, true).firstOrNull()?.id ?: return "0"
-            rankByType[type] = roleId
-        }
-        return rankByType[type] ?: "0"
-    }
-
     fun run(pool: ScheduledExecutorService, scheduler: Scheduler) {
         log.info("Listening for stream from ${configuration.twitchUser}")
         val webhook = WebhookClientBuilder(configuration.streamNotifications)
@@ -120,7 +111,10 @@ class StreamWatcher(
             }
             .retry(Exceptions::isOverflow) // re-subscribe on overflow (fell behind on requests due to internet issues maybe)
             .retry { it::class.java in ignoredErrors } // re-subscribe on internet issues
-            .onErrorContinue { t, _ -> log.error("Error in twitch stream service", t) }
+            .onErrorContinue { t, _ ->
+                if (!Exceptions.isOverflow(t) && t::class.java !in ignoredErrors)
+                    log.error("Error in twitch stream service", t)
+            }
             .doOnEach { System.gc() }
             .doFinally { log.warn("Twitch service terminated unexpectedly with signal {}", it) }
             .subscribe()
@@ -160,8 +154,7 @@ class StreamWatcher(
                 val embed = makeEmbedBase(video.title, videoUrl)
                 embed.addField(EmbedField(false, "Time Stamps", index.toString()))
 
-                val roleId = getRole("vod")
-                withPing(roleId) { mention ->
+                withPing("vod") { mention ->
                     val duration = toTwitchTimestamp((offlineTimestamp - streamStarted).toInt())
                     val message = WebhookMessageBuilder()
                         .setContent("$mention VOD [$duration]")
@@ -186,9 +179,8 @@ class StreamWatcher(
         log.info("Stream started with game ${game.name} (${game.gameId})")
         jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${configuration.twitchUser}")
         streamStarted = stream.startedAt.toEpochSecond()
-        val roleId = getRole("live")
         currentElement = StreamElement(game, 0, videoId)
-        return withPing(roleId) { mention ->
+        return withPing("live") { mention ->
             val embed = makeEmbed(stream, game, thumbnail, configuration.twitchUser)
                 .setContent("$mention ${configuration.twitchUser} is live with **${game.name}**!")
                 .setUsername(HOOK_NAME)
@@ -215,8 +207,7 @@ class StreamWatcher(
             }
             .flatMap { tuple ->
                 val (game, thumbnail) = tuple
-                val roleId = getRole("update")
-                withPing(roleId) { mention ->
+                withPing("update") { mention ->
                     val embed = makeEmbed(stream, game, thumbnail, configuration.twitchUser)
                         .setContent("$mention ${configuration.twitchUser} switched game to **${game.name}**!")
                         .setUsername(HOOK_NAME)
@@ -230,6 +221,15 @@ class StreamWatcher(
 
     /// HELPERS
 
+    private fun getRole(type: String): String {
+        val roleName = configuration.ranks[type] ?: "0"
+        if (type !in rankByType) {
+            val roleId = jda.getRolesByName(roleName, true).firstOrNull()?.id ?: return "0"
+            rankByType[type] = roleId
+        }
+        return rankByType[type] ?: "0"
+    }
+
     private fun toTwitchTimestamp(timestamp: Int): String {
         val duration = Duration.ofSeconds(timestamp.toLong())
         val hours = duration.toHours()
@@ -238,7 +238,8 @@ class StreamWatcher(
         return "%02dh%02dm%02ds".format(hours, minutes, seconds)
     }
 
-    private inline fun <T> withPing(roleId: String, crossinline block: (String) -> Mono<T>): Mono<T> {
+    private inline fun <T> withPing(type: String, crossinline block: (String) -> Mono<T>): Mono<T> {
+        val roleId = getRole(type)
         val role = jda.getRoleById(roleId) ?: return block("")
         val guild = role.guild
         if (!guild.selfMember.hasPermission(Permission.MANAGE_ROLES)) {

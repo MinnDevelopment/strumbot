@@ -56,6 +56,7 @@ private val ignoredErrors = setOf<Class<*>>(
     UnknownHostException::class.java          // DNS errors
 )
 
+data class Timestamps(val display: String, val twitchFormat: String)
 data class StreamElement(val game: Game, val timestamp: Int, val videoId: String)
 
 class StreamWatcher(
@@ -142,8 +143,8 @@ class StreamWatcher(
         return Flux.fromIterable(timestamps)
             .map {
                 val url = "https://www.twitch.tv/videos/${it.videoId}"
-                val twitchTimestamp = toTwitchTimestamp(it.timestamp)
-                "${it.game.name} ( [$twitchTimestamp](${url}?t=$twitchTimestamp) )"
+                val (timestamp, twitchTimestamp) = toTwitchTimestamp(it.timestamp)
+                "[`$timestamp`]($url?t=$twitchTimestamp) ${it.game.name}"
             }
             .reduce(StringBuilder()) { a, b -> a.append("\n").append(b) }
             .flatMap { Mono.zip(it.toMono(), twitch.getVideoById(videoId)) }
@@ -155,7 +156,7 @@ class StreamWatcher(
                 embed.addField(EmbedField(false, "Time Stamps", index.toString()))
 
                 withPing("vod") { mention ->
-                    val duration = toTwitchTimestamp((offlineTimestamp - streamStarted).toInt())
+                    val (_, duration) = toTwitchTimestamp((offlineTimestamp - streamStarted).toInt())
                     val message = WebhookMessageBuilder()
                         .setContent("$mention VOD [$duration]")
                         .setUsername(HOOK_NAME)
@@ -230,12 +231,14 @@ class StreamWatcher(
         return rankByType[type] ?: "0"
     }
 
-    private fun toTwitchTimestamp(timestamp: Int): String {
+    private fun toTwitchTimestamp(timestamp: Int): Timestamps {
         val duration = Duration.ofSeconds(timestamp.toLong())
         val hours = duration.toHours()
         val minutes = duration.minusHours(hours).toMinutes()
         val seconds = duration.minusHours(hours).minusMinutes(minutes).toSeconds()
-        return "%02dh%02dm%02ds".format(hours, minutes, seconds)
+        return Timestamps(
+            "%02d:%02d:%02d".format(hours, minutes, seconds),
+            "%02dh%02dm%02ds".format(hours, minutes, seconds))
     }
 
     private inline fun <T> withPing(type: String, crossinline block: (String) -> Mono<T>): Mono<T> {

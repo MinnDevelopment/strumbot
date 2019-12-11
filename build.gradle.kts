@@ -40,8 +40,7 @@ tasks.create<Copy>("install") {
     enabled = File("config.json").let { it.exists() && it.canRead() }
     from(shadowJar.archiveFile.get())
     from("config.json")
-    from("run.bat")
-    from("run.sh")
+    from("src/scripts")
     into("$buildDir/install/")
     doLast {
         setupScript("$buildDir/install/run.bat")
@@ -53,7 +52,9 @@ build.dependsOn(shadowJar)
 
 fun setupScript(path: String) {
     val file = File(path)
-    file.writeText(file.readText().replace("%NAME%", shadowJar.archiveFileName.get()))
+    file.writeText(file.readText()
+        .replace("%NAME%", shadowJar.archiveFileName.get())
+        .replace("%VERSION%", version.toString()))
     file.setExecutable(true)
     file.setReadable(true)
 }

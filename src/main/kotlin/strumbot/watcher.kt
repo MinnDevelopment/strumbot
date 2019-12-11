@@ -54,8 +54,9 @@ class StreamWatcher(
     private val timestamps: MutableList<StreamElement> = mutableListOf()
 
     private fun getRole(type: String): String {
+        val roleName = configuration.ranks[type] ?: "0"
         if (type !in rankByType) {
-            val roleId = jda.getRolesByName(type, true).firstOrNull()?.id ?: return "0"
+            val roleId = jda.getRolesByName(roleName, true).firstOrNull()?.id ?: return "0"
             rankByType[type] = roleId
         }
         return rankByType[type] ?: "0"
@@ -109,29 +110,7 @@ class StreamWatcher(
             .subscribe()
     }
 
-    private fun <T> withPing(roleId: String, block: (String) -> Mono<T>): Mono<T> {
-        val role = jda.getRoleById(roleId) ?: return block("")
-        val guild = role.guild
-        if (!guild.selfMember.hasPermission(Permission.MANAGE_ROLES)) {
-            // we were missing permissions to make it mentionable but we can still try to mention it
-            return block("<@&$roleId>")
-        }
-
-        return role.manager.setMentionable(true).asMono()
-            .then { block("<@&$roleId>") }
-            .flatMap { result ->
-                val notMentionable = role.manager.setMentionable(false).asMono()
-                notMentionable.thenReturn(result)
-            }
-    }
-
-    private fun toTwitchTimestamp(timestamp: Int): String {
-        val duration = Duration.ofSeconds(timestamp.toLong())
-        val hours = duration.toHours()
-        val minutes = duration.minusHours(hours).toMinutes()
-        val seconds = duration.minusHours(hours).minusMinutes(minutes).toSeconds()
-        return "%02dh%02dm%02ds".format(hours, minutes, seconds)
-    }
+    /// EVENTS
 
     private fun handleOffline(webhook: WebhookClient): Mono<ReadonlyMessage> {
         if (offlineTimestamp == 0L) {
@@ -175,7 +154,9 @@ class StreamWatcher(
                         .addFile("thumbnail.jpg", thumbnail)
                         .build()
 
-                    Mono.fromFuture { webhook.send(message) }
+                    fireEvent("vod") {
+                        Mono.fromFuture { webhook.send(message) }
+                    }
                 }
             }
     }
@@ -196,7 +177,9 @@ class StreamWatcher(
                 .setContent("$mention ${configuration.twitchUser} is live with **${game.name}**!")
                 .setUsername(HOOK_NAME)
                 .build()
-            Mono.fromFuture { webhook.send(embed) }
+            fireEvent("live") {
+                Mono.fromFuture { webhook.send(embed) }
+            }
         }
     }
 
@@ -222,9 +205,45 @@ class StreamWatcher(
                         .setContent("$mention ${configuration.twitchUser} switched game to **${game.name}**!")
                         .setUsername(HOOK_NAME)
                         .build()
-                    Mono.fromFuture { webhook.send(embed) }
+                    fireEvent("update") {
+                        Mono.fromFuture { webhook.send(embed) }
+                    }
                 }
             }
+    }
+
+    /// HELPERS
+
+    private fun toTwitchTimestamp(timestamp: Int): String {
+        val duration = Duration.ofSeconds(timestamp.toLong())
+        val hours = duration.toHours()
+        val minutes = duration.minusHours(hours).toMinutes()
+        val seconds = duration.minusHours(hours).minusMinutes(minutes).toSeconds()
+        return "%02dh%02dm%02ds".format(hours, minutes, seconds)
+    }
+
+    private inline fun <T> withPing(roleId: String, crossinline block: (String) -> Mono<T>): Mono<T> {
+        val role = jda.getRoleById(roleId) ?: return block("")
+        val guild = role.guild
+        if (!guild.selfMember.hasPermission(Permission.MANAGE_ROLES)) {
+            // we were missing permissions to make it mentionable but we can still try to mention it
+            return block("<@&$roleId>")
+        }
+
+        return role.manager.setMentionable(true).asMono()
+            .then { block("<@&$roleId>") }
+            .flatMap { result ->
+                val notMentionable = role.manager.setMentionable(false).asMono()
+                notMentionable.thenReturn(result)
+            }
+    }
+
+    private inline fun <T> fireEvent(type: String, block: () -> Mono<T>): Mono<T> {
+        return if (type in configuration.events) {
+            block()
+        } else {
+            Mono.empty()
+        }
     }
 }
 

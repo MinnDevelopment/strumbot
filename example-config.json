@@ -3,7 +3,12 @@
     "token": "NjUzMjM1MjY5MzM1NjQ2MjA4.*******.*******",
     "stream_notifications": "https://discordapp.com/api/webhooks/*******/******",
     "message_logs": "https://discordapp.com/api/webhooks/*******/****** (optional)",
-    "ranks": ["live", "vod", "update"]
+    "role_name": {
+      "live": "live",
+      "vod": "vod",
+      "update": "update"
+    },
+    "enabled_events": ["live", "update", "vod"]
   },
   "twitch": {
     "client_id": "*******",

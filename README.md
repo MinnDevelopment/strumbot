@@ -1,3 +1,5 @@
+[example-config]: https://github.com/MinnDevelopment/strumbot/blob/master/example-config.json
+
 # Strumbot
 
 A Twitch Stream Notification Bot. This will send notifications to a webhook in your Discord server when the subscribed streamer goes live or changes their game.
@@ -9,7 +11,7 @@ A Twitch Stream Notification Bot. This will send notifications to a webhook in y
 
 ## Configurations
 
-The configuration file must be called `config.json` and has to be in the working directory. An example configuration can be found in `example-config.json`.
+The configuration file must be called `config.json` and has to be in the working directory. An example configuration can be found in [`example-config.json`][example-config].
 Anything marked with **(optional)** can be set to `null` to be disabled.
 
 ### Discord

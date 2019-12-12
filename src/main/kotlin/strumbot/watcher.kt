@@ -56,6 +56,8 @@ private val ignoredErrors = setOf<Class<*>>(
     UnknownHostException::class.java          // DNS errors
 )
 
+private fun suppressExpected(t: Throwable) = !Exceptions.isOverflow(t) && t::class.java !in ignoredErrors
+
 data class Timestamps(val display: String, val twitchFormat: String)
 data class StreamElement(val game: Game, val timestamp: Int, val videoId: String)
 
@@ -80,9 +82,12 @@ class StreamWatcher(
 
         Flux.interval(Duration.ofSeconds(0), Duration.ofSeconds(10), scheduler)
             .flatMap {
+                // There are 4 states we can process
                 if (currentElement != null) {
                     twitch.getStreamByLogin(configuration.twitchUser)
                         .switchIfEmpty {
+                            // 1. The stream was online and is now offline
+                            // => Send offline notification (vod event)
                             handleOffline(webhook).then(Mono.empty())
                         }
                         .flatMap { Mono.zip(it.toMono(), twitch.getVideoByStream(it).map(Video::id)) }
@@ -90,9 +95,12 @@ class StreamWatcher(
                             val (stream, videoId) = tuple
                             offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                             if (stream.gameId != currentElement?.game?.gameId) {
+                                // 2. The stream was online and has switched the game
+                                // => Send update game notification (update event)
                                 handleUpdate(stream, videoId, webhook)
                             } else {
-                                // Unchanged
+                                // 3. The stream was online and has not switched the game
+                                // => Do nothing
                                 Mono.empty<Unit>()
                             }
                         }
@@ -105,18 +113,16 @@ class StreamWatcher(
                                 twitch.getThumbnail(stream))
                         }
                         .flatMap { tuple ->
+                            // 4. The stream was offline and has come online
+                            // => Send go live notification (live event)
                             offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                             handleGoLive(tuple, webhook)
                         }
                 }
             }
-            .retry(Exceptions::isOverflow) // re-subscribe on overflow (fell behind on requests due to internet issues maybe)
-            .retry { it::class.java in ignoredErrors } // re-subscribe on internet issues
-            .onErrorContinue { t, _ ->
-                if (!Exceptions.isOverflow(t) && t::class.java !in ignoredErrors)
-                    log.error("Error in twitch stream service", t)
-            }
+            .doOnError(::suppressExpected) { log.error("Error in twitch stream service", it) }
             .doOnEach { System.gc() }
+            .retry { it !is Error }
             .doFinally { log.warn("Twitch service terminated unexpectedly with signal {}", it) }
             .subscribe()
     }
@@ -176,7 +182,6 @@ class StreamWatcher(
         webhook: WebhookClient
     ): Mono<ReadonlyMessage> {
         val (stream, game, videoId, thumbnail) = tuple
-
         log.info("Stream started with game ${game.name} (${game.gameId})")
         jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${configuration.twitchUser}")
         streamStarted = stream.startedAt.toEpochSecond()
@@ -197,10 +202,10 @@ class StreamWatcher(
         videoId: String,
         webhook: WebhookClient
     ): Mono<ReadonlyMessage> {
-        log.info("Stream changed game ${currentElement?.game?.gameId} -> ${stream.gameId}")
         timestamps.add(currentElement!!)
         return twitch.getGame(stream)
             .flatMap { game ->
+                log.info("Stream changed game ${currentElement?.game?.name} -> ${game.name}")
                 jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${configuration.twitchUser}")
                 val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
                 currentElement = StreamElement(game, timestamp, videoId)

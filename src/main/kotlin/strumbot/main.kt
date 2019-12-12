@@ -108,11 +108,13 @@ private fun setupRankListener(jda: JDA, configuration: Configuration) {
                     // Send a failure message, unknown role
                     channel.sendMessage("$mention I don't know that role!").asMono()
                 }
-            }.doOnError(PermissionException::class.java) { error ->
+            }.onErrorResume(PermissionException::class.java) { error ->
+                log.error("Failed to execute rank command", error)
                 handlePermissionError(error, channel, mention, role)
             }
         }
-        .onErrorContinue { t, _ -> log.error("Rank service encountered exception", t) }
+        .doOnError { log.error("Rank service encountered exception", it) }
+        .retry { it !is Error }
         .subscribe()
 }
 
@@ -141,15 +143,15 @@ private fun handlePermissionError(
     channel: MessageChannel,
     mention: String,
     role: Role?
-) {
+): Mono<Message> {
     if (error.permission == Permission.MESSAGE_WRITE || error.permission == Permission.MESSAGE_READ)
-        return // Don't attempt to send another message if it already failed because of it
-    when (error) {
+        return Mono.empty() // Don't attempt to send another message if it already failed because of it
+    return when (error) {
         is InsufficientPermissionException ->
-            channel.sendMessage("$mention, I'm missing the permission **${error.permission.getName()}**").queue()
+            channel.sendMessage("$mention, I'm missing the permission **${error.permission.getName()}**").asMono()
         is HierarchyException ->
-            channel.sendMessage("$mention, I can't assign a role to you because the role is too high! Role: ${role?.name}").queue()
+            channel.sendMessage("$mention, I can't assign a role to you because the role is too high! Role: ${role?.name}").asMono()
         else ->
-            channel.sendMessage("$mention, encountered an error: `$error`!").queue()
+            channel.sendMessage("$mention, encountered an error: `$error`!").asMono()
     }
 }

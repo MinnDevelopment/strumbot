@@ -44,6 +44,7 @@ import java.time.Duration
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ScheduledExecutorService
 
 private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
@@ -170,9 +171,7 @@ class StreamWatcher(
                         .addFile("thumbnail.jpg", thumbnail)
                         .build()
 
-                    fireEvent("vod") {
-                        Mono.fromFuture { webhook.send(message) }
-                    }
+                    webhook.fireEvent("vod") { send(message) }
                 }
             }
     }
@@ -191,9 +190,7 @@ class StreamWatcher(
                 .setContent("$mention ${configuration.twitchUser} is live with **${game.name}**!")
                 .setUsername(HOOK_NAME)
                 .build()
-            fireEvent("live") {
-                Mono.fromFuture { webhook.send(embed) }
-            }
+            webhook.fireEvent("live") { send(embed) }
         }
     }
 
@@ -218,15 +215,14 @@ class StreamWatcher(
                         .setContent("$mention ${configuration.twitchUser} switched game to **${game.name}**!")
                         .setUsername(HOOK_NAME)
                         .build()
-                    fireEvent("update") {
-                        Mono.fromFuture { webhook.send(embed) }
-                    }
+                    webhook.fireEvent("update") { send(embed) }
                 }
             }
     }
 
     /// HELPERS
 
+    // Convert role type to role id
     private fun getRole(type: String): String {
         val roleName = configuration.ranks[type] ?: "0"
         if (type !in rankByType) {
@@ -236,6 +232,7 @@ class StreamWatcher(
         return rankByType[type] ?: "0"
     }
 
+    // Convert seconds to readable timestamp
     private fun toTwitchTimestamp(timestamp: Int): Timestamps {
         val duration = Duration.ofSeconds(timestamp.toLong())
         val hours = duration.toHours()
@@ -246,6 +243,7 @@ class StreamWatcher(
             "%02dh%02dm%02ds".format(hours, minutes, seconds))
     }
 
+    // Run callback with mentionable role
     private inline fun <T> withPing(type: String, crossinline block: (String) -> Mono<T>): Mono<T> {
         val roleId = getRole(type)
         val role = jda.getRoleById(roleId) ?: return block("")
@@ -263,9 +261,10 @@ class StreamWatcher(
             }
     }
 
-    private inline fun <T> fireEvent(type: String, block: () -> Mono<T>): Mono<T> {
+    // Fire webhook event if enabled in the configuration
+    private inline fun <T> WebhookClient.fireEvent(type: String, crossinline block: WebhookClient.() -> CompletableFuture<T>): Mono<T> {
         return if (type in configuration.events) {
-            block()
+            Mono.fromFuture { block(this) }
         } else {
             Mono.empty()
         }

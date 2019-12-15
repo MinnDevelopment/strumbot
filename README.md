@@ -1,3 +1,6 @@
+[live-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/live-event.png
+[update-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/update-event.png
+[vod-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/vod-event.png
 [example-config]: https://github.com/MinnDevelopment/strumbot/blob/master/example-config.json
 
 # Strumbot
@@ -26,9 +29,9 @@ This section of the configuration contains settings for the discord side of the 
 
 #### Events
 
-- `live` When the streamer goes live
-- `update` When the streamer changes the current game
-- `vod` When the streamer goes offline (includes vod timestamps for game changes)
+- [`live`][live-event] When the streamer goes live
+- [`update`][update-event] When the streamer changes the current game
+- [`vod`][vod-event] When the streamer goes offline (includes vod timestamps for game changes)
 
 ### Twitch
 

@@ -20,12 +20,19 @@ Anything marked with **(optional)** can be set to `null` to be disabled.
 ### Discord
 
 This section of the configuration contains settings for the discord side of the bot such as role names and webhook URLs.
+Note that the bot uses global role cache, independent of servers, and it is recommended to only have the bot account in one server.
 
 - `token` The discord bot token
 - `stream_notifications` The webhook URL to send stream updates to
 - `message_logs` **(optional)** The webhook URL for message logs (edits/deletes)
 - `role_name` Configuration of `type`->`role` to change the default names of the update roles
 - `enabled_events` Array of events to publish to the `stream_notifications` webhook
+
+The roles used for updates can be managed by the bot with the `?rank <type>` command.
+This command will automatically assign the role to the user.
+
+For example, with the configuration `"live": "Stream is Live"` the bot will accept the command `?rank live` and assign/remove the role `Stream is Live` for the user.
+The bot will automatically delete its own message if the invoking message is deleted by the user or an admin.
 
 #### Events
 

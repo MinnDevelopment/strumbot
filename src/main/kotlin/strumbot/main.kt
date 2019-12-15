@@ -28,6 +28,7 @@ import net.dv8tion.jda.api.entities.Member
 import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.MessageChannel
 import net.dv8tion.jda.api.entities.Role
+import net.dv8tion.jda.api.events.message.MessageDeleteEvent
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent
 import net.dv8tion.jda.api.exceptions.HierarchyException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
@@ -83,39 +84,55 @@ fun main() {
 }
 
 private fun setupRankListener(jda: JDA, configuration: Configuration) {
+    // Keep track of messages for cleanup when the invoking command is deleted
+    data class MessagePath(val channel: Long, val message: Long)
+    val messages = FixedSizeMap<Long, MessagePath>(10)
+
     jda.on<GuildMessageReceivedEvent>()
         .map { it.message }
         .filter { it.member != null }
         .filter { it.contentRaw.startsWith("?rank ") }
-        .flatMap { event ->
-            val member = event.member!!
+        .flatMap { message ->
+            val member = message.member!!
             val mention = member.asMention
             // The role name is after the command
-            val roleName = event.contentRaw.removePrefix("?rank ").toLowerCase()
+            val roleType = message.contentRaw.removePrefix("?rank ").toLowerCase()
             // We shouldn't let users assign themselves any other roles like mod
-            val channel = event.channel
-            if (roleName !in configuration.ranks) {
-                return@flatMap channel.sendMessage("$mention, That role does not exist!").asMono()
-            }
-
-            // Check if role by that name exists
-            val role = event.guild.getRolesByName(roleName, false).firstOrNull()
+            val channel = message.channel
             Mono.defer {
-                if (role != null) {
-                    // Add/Remove the role to the member and send a success message
-                    toggleRole(member, role, event, channel, mention)
-                } else {
-                    // Send a failure message, unknown role
-                    channel.sendMessage("$mention I don't know that role!").asMono()
+                val roleName = configuration.ranks[roleType]
+                    ?: return@defer channel.sendMessage("$mention, That role is not supported!").asMono()
+
+                // Check if role by that name exists
+                val role = message.guild.getRolesByName(roleName, true).firstOrNull()
+                Mono.defer {
+                    if (role != null) // Add/Remove the role to the member and send a success message
+                        toggleRole(member, role, message, channel, mention)
+                    else              // Send a failure message, unknown role
+                        channel.sendMessage("$mention, That role does not exist!").asMono()
+                }.onErrorResume(PermissionException::class.java) { error ->
+                    log.error("Failed to execute rank command", error)
+                    handlePermissionError(error, channel, mention, role)
                 }
-            }.onErrorResume(PermissionException::class.java) { error ->
-                log.error("Failed to execute rank command", error)
-                handlePermissionError(error, channel, mention, role)
+            }.doOnSuccess {
+                messages[message.idLong] = MessagePath(channel.idLong, it.idLong)
             }
         }
         .doOnError { log.error("Rank service encountered exception", it) }
         .retry { it !is Error }
         .subscribe()
+
+    jda.on<MessageDeleteEvent>()
+       .map { it.messageIdLong }
+       .filter(messages::containsKey)
+       .map(messages::getValue)
+       .flatMap {
+           val (channelId, messageId) = it
+           jda.getTextChannelById(channelId)
+             ?.deleteMessageById(messageId)
+             ?.asMono() ?: Mono.empty()
+       }
+       .subscribe()
 }
 
 private fun toggleRole(

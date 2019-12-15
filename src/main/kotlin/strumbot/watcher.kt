@@ -222,16 +222,6 @@ class StreamWatcher(
 
     /// HELPERS
 
-    // Convert role type to role id
-    private fun getRole(type: String): String {
-        val roleName = configuration.ranks[type] ?: "0"
-        if (type !in rankByType) {
-            val roleId = jda.getRolesByName(roleName, true).firstOrNull()?.id ?: return "0"
-            rankByType[type] = roleId
-        }
-        return rankByType[type] ?: "0"
-    }
-
     // Convert seconds to readable timestamp
     private fun toTwitchTimestamp(timestamp: Int): Timestamps {
         val duration = Duration.ofSeconds(timestamp.toLong())
@@ -245,7 +235,7 @@ class StreamWatcher(
 
     // Run callback with mentionable role
     private inline fun <T> withPing(type: String, crossinline block: (String) -> Mono<T>): Mono<T> {
-        val roleId = getRole(type)
+        val roleId = jda.getRoleByType(configuration, type)
         val role = jda.getRoleById(roleId) ?: return block("")
         val guild = role.guild
         if (!guild.selfMember.hasPermission(Permission.MANAGE_ROLES)) {

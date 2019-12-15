@@ -39,18 +39,21 @@ tasks.create<Copy>("install") {
     dependsOn(shadowJar)
     enabled = File("config.json").let { it.exists() && it.canRead() }
     from(shadowJar.archiveFile.get())
-    from("config.json")
+    from("example-config.json")
     from("src/scripts")
-    val output = "$buildDir/install"
+    val output = "$buildDir/install/strumbot"
     into("$output/")
     doFirst {
         File("$output/strumbot.jar").delete()
+        File("$output/config.json").delete()
     }
     doLast {
         setupScript("$output/run.bat")
         setupScript("$output/run.sh")
         val archive = File("$output/${shadowJar.archiveFileName.get()}")
         archive.renameTo(File("$output/strumbot.jar"))
+        val config = File("$output/example-config.json")
+        config.renameTo(File("$output/config.json"))
     }
 }
 

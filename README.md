@@ -70,6 +70,7 @@ I'm open for pull requests that introduce more or better setups.
 
 1. Download the zip archive from the [latest release](https://github.com/MinnDevelopment/strumbot/releases/latest)
 1. Unzip and open the resulting directory in a terminal of your choice
+1. Change the configuration in `config.json`
 1. Build the image with `docker build -t strumbot:latest .`
 1. Create the container with `docker create --name strumbot --restart unless-stopped strumbot:latest`
 1. Run the container with `docker start strumbot`
@@ -78,6 +79,7 @@ I'm open for pull requests that introduce more or better setups.
 
 1. Download the zip archive from the [latest release](https://github.com/MinnDevelopment/strumbot/releases/latest)
 1. Unzip and open the resulting directory in a terminal of your choice
+1. Change the configuration in `config.json`
 1. Run the script for your current platform:
     1. Windows: `run.bat`
     1. Linux: `run.sh`

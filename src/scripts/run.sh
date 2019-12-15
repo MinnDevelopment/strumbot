@@ -1,2 +1,2 @@
-echo -en "\033]0;Strumbot %VERSION%\a"
+echo Running Strumbot (%VERSION%)
 java -jar "%NAME%"

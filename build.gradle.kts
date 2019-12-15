@@ -11,8 +11,8 @@ application {
     mainClassName = "strumbot.Main"
 }
 
-group = "org.example"
-version = "0.1.0"
+group = "dev.minn"
+version = "0.1.1"
 
 repositories {
     jcenter()
@@ -41,10 +41,16 @@ tasks.create<Copy>("install") {
     from(shadowJar.archiveFile.get())
     from("config.json")
     from("src/scripts")
-    into("$buildDir/install/")
+    val output = "$buildDir/install"
+    into("$output/")
+    doFirst {
+        File("$output/strumbot.jar").delete()
+    }
     doLast {
-        setupScript("$buildDir/install/run.bat")
-        setupScript("$buildDir/install/run.sh")
+        setupScript("$output/run.bat")
+        setupScript("$output/run.sh")
+        val archive = File("$output/${shadowJar.archiveFileName.get()}")
+        archive.renameTo(File("$output/strumbot.jar"))
     }
 }
 
@@ -53,7 +59,7 @@ build.dependsOn(shadowJar)
 fun setupScript(path: String) {
     val file = File(path)
     file.writeText(file.readText()
-        .replace("%NAME%", shadowJar.archiveFileName.get())
+        .replace("%NAME%", "strumbot.jar")
         .replace("%VERSION%", version.toString()))
     file.setExecutable(true)
     file.setReadable(true)

@@ -18,6 +18,7 @@ package strumbot
 
 import net.dv8tion.jda.api.utils.data.DataObject
 import java.io.File
+import java.io.FileNotFoundException
 
 data class Configuration(
     val token: String,
@@ -31,8 +32,13 @@ data class Configuration(
 )
 
 
-fun loadConfiguration(path: String): Configuration {
-    val json = DataObject.fromJson(File(path).reader())
+fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.json"): Configuration {
+    val json = try {
+        DataObject.fromJson(File(path).reader())
+    } catch (ex: FileNotFoundException) {
+        DataObject.fromJson(File(fallback).reader())
+    }
+
     val discord = json.getObject("discord")
     val twitch = json.getObject("twitch")
     val roles = discord.getObject("role_name").let {

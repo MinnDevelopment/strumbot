@@ -78,12 +78,21 @@ I'm open for pull requests that introduce more or better setups.
 
 ### Docker
 
-1. Download the zip archive from the [latest release](https://github.com/MinnDevelopment/strumbot/releases/latest)
-1. Unzip and open the resulting directory in a terminal of your choice
+The image is hosted at [docker hub](https://hub.docker.com/repository/docker/minnced/strumbot).
+
+1. Open a terminal in the directory of your choice (which includes the `config.json`!)
+1. Pull the image with `docker pull minnced/strumbot:%VERSION%` (Replace `%VERSION%` with the version here: [latest release](https://github.com/MinnDevelopment/strumbot/releases/latest))
 1. Change the configuration in `config.json`
-1. Build the image with `docker build -t strumbot:latest .`
-1. Create the container with `docker create --name strumbot --restart unless-stopped strumbot:latest`
-1. Run the container with `docker start strumbot`
+1. Create and start a container with this command:
+    ```sh
+    docker run -d \
+      -v $(pwd)/config.json:/etc/strumbot/config.json \
+      --name strumbot \
+      --restart unless-stopped \
+      minnced/strumbot:%VERSION%
+   ```
+
+> For windows users: Replace `$(pwd)` with `%cd%` and `\` with `^`!
 
 ### Script
 

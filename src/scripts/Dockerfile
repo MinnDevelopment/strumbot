@@ -1,8 +1,9 @@
-FROM openjdk:11-jdk
+FROM azul/zulu-openjdk-alpine:11
 
-WORKDIR /app
+WORKDIR /opt/strumbot
 
-COPY config.json .
+VOLUME /etc/strumbot
+
 COPY strumbot.jar .
 
 CMD [ "java", "-jar", "strumbot.jar" ]

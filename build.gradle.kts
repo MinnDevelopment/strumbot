@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "0.1.2"
+version = "0.1.4"
 
 repositories {
     jcenter()
@@ -21,12 +21,13 @@ repositories {
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("net.dv8tion:JDA:4.0.0_72")
+    implementation("net.dv8tion:JDA:4.1.0_81")
     implementation("club.minnced:jda-reactor:1.0.0")
     implementation("club.minnced:discord-webhooks:0.1.8")
     implementation(kotlin("stdlib-jdk8"))
 }
 
+val clean by tasks
 val build by tasks
 val compileKotlin: KotlinCompile by tasks
 val shadowJar: ShadowJar by tasks
@@ -36,20 +37,21 @@ compileKotlin.apply {
 }
 
 tasks.create<Copy>("install") {
+    shadowJar.mustRunAfter(clean)
     dependsOn(shadowJar)
-    enabled = File("config.json").let { it.exists() && it.canRead() }
+    dependsOn(clean)
+
     from(shadowJar.archiveFile.get())
-    from("example-config.json")
     from("src/scripts")
+    from("example-config.json")
     val output = "$buildDir/install/strumbot"
     into("$output/")
-    doFirst {
-        File("$output/strumbot.jar").delete()
-        File("$output/config.json").delete()
-    }
+    doFirst { File(output).delete() }
     doLast {
         setupScript("$output/run.bat")
         setupScript("$output/run.sh")
+        setupScript("$output/docker-setup.sh")
+        setupScript("$output/docker-setup.bat")
         val archive = File("$output/${shadowJar.archiveFileName.get()}")
         archive.renameTo(File("$output/strumbot.jar"))
         val config = File("$output/example-config.json")

@@ -22,6 +22,8 @@ Anything marked with **(optional)** can be set to `null` to be disabled.
 This section of the configuration contains settings for the discord side of the bot such as role names and webhook URLs.
 Note that the bot uses global role cache, independent of servers, and it is recommended to only have the bot account in one server.
 
+If you don't know how to create a discord bot and get access to the token: [How to make a discord bot](https://github.com/MinnDevelopment/strumbot/blob/master/guides/HOW_TO_CREATE_A_BOT.md)
+
 - `token` The discord bot token
 - `stream_notifications` The webhook URL to send stream updates to
 - `message_logs` **(optional)** The webhook URL for message logs (edits/deletes)
@@ -43,6 +45,8 @@ The bot will automatically delete its own message if the invoking message is del
 ### Twitch
 
 This configuration section contains required information to track the stream status.
+
+If you don't know how to make a twitch application and access the client_id: [How to make a twitch app](https://github.com/MinnDevelopment/strumbot/blob/master/guides/HOW_TO_CREATE_A_TWITCH_APP.md)
 
 - `client_id` The twitch application's client_id
 - `client_secret` The twitch application's client_secret (currently unused)

@@ -3,6 +3,9 @@
 [vod-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/vod-event.png
 [example-config]: https://github.com/MinnDevelopment/strumbot/blob/master/example-config.json
 
+[ ![docker-pulls](https://img.shields.io/docker/pulls/minnced/strumbot) ](https://hub.docker.com/repository/docker/minnced/strumbot)
+[ ![release](https://img.shields.io/github/v/tag/minndevelopment/strumbot) ](https://github.com/MinnDevelopment/strumbot/releases/latest)
+
 # Strumbot
 
 A Twitch Stream Notification Bot. This will send notifications to a webhook in your Discord server when the subscribed streamer goes live or changes their game.

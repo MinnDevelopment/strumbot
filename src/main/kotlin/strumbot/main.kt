@@ -28,16 +28,21 @@ import net.dv8tion.jda.api.entities.Member
 import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.MessageChannel
 import net.dv8tion.jda.api.entities.Role
+import net.dv8tion.jda.api.events.guild.GuildJoinEvent
+import net.dv8tion.jda.api.events.guild.GuildReadyEvent
 import net.dv8tion.jda.api.events.message.MessageDeleteEvent
 import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent
 import net.dv8tion.jda.api.exceptions.HierarchyException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
+import net.dv8tion.jda.api.requests.restaction.RoleAction
 import net.dv8tion.jda.api.utils.cache.CacheFlag
 import okhttp3.OkHttpClient
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
+import reactor.core.publisher.toFlux
 import reactor.core.scheduler.Schedulers
 import java.util.EnumSet.noneOf
 import java.util.concurrent.Executors
@@ -73,6 +78,7 @@ fun main() {
         .setRateLimitPool(pool)
         .build()
 
+    setupRankCreator(jda, configuration)
     setupRankListener(jda, configuration)
     // Optional message logging
     configuration.messageLogs?.let { messageWebhook ->
@@ -81,6 +87,23 @@ fun main() {
 
     jda.awaitReady()
     StreamWatcher(twitch, jda, configuration).run(pool, poolScheduler)
+}
+
+private fun setupRankCreator(jda: JDA, configuration: Configuration) {
+    val listener = Flux.merge(
+        jda.on<GuildReadyEvent>().map(GuildReadyEvent::getGuild),
+        jda.on<GuildJoinEvent>().map(GuildJoinEvent::getGuild)
+    )
+
+    val ranks = configuration.ranks.values
+    listener
+        .flatMap { guild ->
+            ranks.toFlux()
+                 .filter { guild.getRolesByName(it, true).isEmpty() }
+                 .map { guild.createRole().setName(it) }
+                 .flatMap(RoleAction::asMono)
+        }
+        .subscribe { log.info("Created role ${it.name} in ${it.guild.name}") }
 }
 
 private fun setupRankListener(jda: JDA, configuration: Configuration) {

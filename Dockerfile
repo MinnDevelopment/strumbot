@@ -4,6 +4,6 @@ WORKDIR /opt/strumbot
 
 VOLUME /etc/strumbot
 
-COPY strumbot.jar .
+COPY build/install/strumbot/strumbot.jar .
 
 CMD [ "java", "-jar", "strumbot.jar" ]

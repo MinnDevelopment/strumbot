@@ -3,3 +3,4 @@ build/
 .gradle/
 .idea/
 gradle.properties
+docker-compose.yml

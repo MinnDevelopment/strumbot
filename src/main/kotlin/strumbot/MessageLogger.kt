@@ -53,7 +53,6 @@ class MessageLogger(
 
     init {
         jda.on<MessageReceivedEvent>()
-           .filter { it.author != jda.selfUser }
            .subscribe {
                val message = DiscordMessage(
                    it.author.id,

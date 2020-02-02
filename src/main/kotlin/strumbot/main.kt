@@ -35,7 +35,9 @@ import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent
 import net.dv8tion.jda.api.exceptions.HierarchyException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
+import net.dv8tion.jda.api.requests.GatewayIntent
 import net.dv8tion.jda.api.requests.restaction.RoleAction
+import net.dv8tion.jda.api.utils.MemberCachePolicy
 import net.dv8tion.jda.api.utils.cache.CacheFlag
 import okhttp3.OkHttpClient
 import org.slf4j.Logger
@@ -44,13 +46,17 @@ import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.scheduler.Schedulers
+import java.lang.Integer.min
 import java.util.EnumSet.noneOf
 import java.util.concurrent.Executors
+import java.util.concurrent.ForkJoinPool
 import kotlin.concurrent.thread
 
 private val log = LoggerFactory.getLogger("Main") as Logger
 
-private val pool = Executors.newScheduledThreadPool(2) {
+fun getThreadCount(): Int = min(2, ForkJoinPool.getCommonPoolParallelism())
+
+private val pool = Executors.newScheduledThreadPool(getThreadCount()) {
     thread(start=false, name="Worker-Thread", isDaemon=true, block=it::run)
 }
 
@@ -72,7 +78,8 @@ fun main() {
         .setEventManager(manager)
         .setHttpClient(okhttp)
         .setEnabledCacheFlags(noneOf(CacheFlag::class.java))
-        .setGuildSubscriptionsEnabled(false)
+        .setMemberCachePolicy(MemberCachePolicy.NONE)
+        .setEnabledIntents(GatewayIntent.GUILD_MESSAGES)
         .setCallbackPool(pool)
         .setGatewayPool(pool)
         .setRateLimitPool(pool)

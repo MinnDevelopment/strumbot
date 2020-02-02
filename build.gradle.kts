@@ -12,16 +12,18 @@ application {
 }
 
 group = "dev.minn"
-version = "0.1.6"
+version = "0.1.7-rc"
 
 repositories {
     jcenter()
     maven("https://oss.jfrog.org/artifactory/libs-release")
+    maven("https://jitpack.io")
 }
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("net.dv8tion:JDA:4.1.0_97")
+//    implementation("net.dv8tion:JDA:4.1.1_105")
+    implementation("com.github.dv8fromtheworld:jda:24383c8")
     implementation("club.minnced:jda-reactor:1.0.0")
     implementation("club.minnced:discord-webhooks:0.2.0")
     implementation(kotlin("stdlib-jdk8"))

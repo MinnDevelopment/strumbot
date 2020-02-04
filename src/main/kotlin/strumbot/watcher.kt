@@ -65,11 +65,13 @@ class StreamWatcher(
     private val jda: JDA,
     private val configuration: Configuration,
     private val userLogin: String,
-    private val pool: ScheduledExecutorService) {
+    private val pool: ScheduledExecutorService,
+    private val activityService: ActivityService) {
 
     @Volatile private var currentElement: StreamElement? = null
     private var offlineTimestamp = 0L
     private var streamStarted = 0L
+    private var currentActivity: Activity? = null
     private val rankByType: MutableMap<String, String> = mutableMapOf()
     private val timestamps: MutableList<StreamElement> = mutableListOf()
     private val webhook: WebhookClient by lazy {
@@ -123,6 +125,12 @@ class StreamWatcher(
         }
     }
 
+    private fun updateActivity(newActivity: Activity?) {
+        currentActivity?.let(activityService::removeActivity)
+        currentActivity = newActivity
+        newActivity?.let(activityService::addActivity)
+    }
+
     /// EVENTS
 
     private fun handleOffline(webhook: WebhookClient): Mono<ReadonlyMessage> {
@@ -134,7 +142,7 @@ class StreamWatcher(
         }
 
         log.info("Stream went offline!")
-        jda.presence.activity = null
+        updateActivity(null)
         timestamps.add(currentElement!!)
         val videoId = currentElement!!.videoId
         currentElement = null
@@ -177,7 +185,7 @@ class StreamWatcher(
     ): Mono<ReadonlyMessage> {
         val (stream, game, videoId, thumbnail) = tuple
         log.info("Stream started with game ${game.name} (${game.gameId})")
-        jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${userLogin}")
+        updateActivity(Activity.streaming(game.name, "https://www.twitch.tv/${userLogin}"))
         streamStarted = stream.startedAt.toEpochSecond()
         currentElement = StreamElement(game, 0, videoId)
         return withPing("live") { mention ->
@@ -198,7 +206,7 @@ class StreamWatcher(
         return twitch.getGame(stream)
             .flatMap { game ->
                 log.info("Stream changed game ${currentElement?.game?.name} -> ${game.name}")
-                jda.presence.activity = Activity.streaming(game.name, "https://www.twitch.tv/${userLogin}")
+                updateActivity(Activity.streaming(game.name, "https://www.twitch.tv/${userLogin}"))
                 val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
                 currentElement = StreamElement(game, timestamp, videoId)
                 Mono.zip(game.toMono(), twitch.getThumbnail(stream))

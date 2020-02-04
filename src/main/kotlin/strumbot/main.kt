@@ -80,6 +80,10 @@ fun main() {
         .setRateLimitPool(pool)
         .build()
 
+    // Cycling streaming status
+    val activityService = ActivityService(jda, poolScheduler)
+    activityService.start()
+
     setupRankCreator(jda, configuration)
     setupRankListener(jda, configuration)
     // Optional message logging
@@ -90,7 +94,7 @@ fun main() {
     jda.awaitReady()
     val watchedStreams = mutableMapOf<String, StreamWatcher>()
     for (userLogin in configuration.twitchUser) {
-        watchedStreams[userLogin] = StreamWatcher(twitch, jda, configuration, userLogin, pool)
+        watchedStreams[userLogin] = StreamWatcher(twitch, jda, configuration, userLogin, pool, activityService)
     }
 
     log.info("Listening for stream(s) from ${configuration.twitchUser}")

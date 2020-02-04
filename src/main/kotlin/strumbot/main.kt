@@ -37,8 +37,6 @@ import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
 import net.dv8tion.jda.api.requests.GatewayIntent
 import net.dv8tion.jda.api.requests.restaction.RoleAction
-import net.dv8tion.jda.api.utils.MemberCachePolicy
-import net.dv8tion.jda.api.utils.cache.CacheFlag
 import okhttp3.OkHttpClient
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -47,7 +45,7 @@ import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.scheduler.Schedulers
 import java.lang.Integer.min
-import java.util.EnumSet.noneOf
+import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool
 import kotlin.concurrent.thread
@@ -74,12 +72,9 @@ fun main() {
         this.scheduler = poolScheduler
     }
 
-    val jda = JDABuilder(configuration.token)
+    val jda = JDABuilder.createLight(configuration.token, GatewayIntent.GUILD_MESSAGES)
         .setEventManager(manager)
         .setHttpClient(okhttp)
-        .setEnabledCacheFlags(noneOf(CacheFlag::class.java))
-        .setMemberCachePolicy(MemberCachePolicy.NONE)
-        .setEnabledIntents(GatewayIntent.GUILD_MESSAGES)
         .setCallbackPool(pool)
         .setGatewayPool(pool)
         .setRateLimitPool(pool)
@@ -93,7 +88,25 @@ fun main() {
     }
 
     jda.awaitReady()
-    StreamWatcher(twitch, jda, configuration).run(pool, poolScheduler)
+    val watchedStreams = mutableMapOf<String, StreamWatcher>()
+    for (userLogin in configuration.twitchUser) {
+        watchedStreams[userLogin] = StreamWatcher(twitch, jda, configuration, userLogin, pool)
+    }
+
+    log.info("Listening for stream(s) from ${configuration.twitchUser}")
+    Flux.interval(Duration.ZERO, Duration.ofSeconds(10), poolScheduler)
+        .flatMap { twitch.getStreamByLogin(watchedStreams.keys) }
+        .flatMapSequential { streams ->
+            Flux.merge(watchedStreams.map { entry ->
+                val (name, watcher) = entry
+                val stream = streams.find { it.userLogin.equals(name, true) }
+                watcher.handle(stream)
+            })
+        }
+        .doOnError(::suppressExpected) { LoggerFactory.getLogger(StreamWatcher::class.java)?.error("Error in twitch stream service", it) }
+        .retry { it !is Error }
+        .doFinally { log.warn("Twitch service terminated unexpectedly with signal {}", it) }
+        .subscribe()
 }
 
 private fun setupRankCreator(jda: JDA, configuration: Configuration) {

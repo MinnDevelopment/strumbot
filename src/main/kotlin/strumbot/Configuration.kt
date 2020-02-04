@@ -16,6 +16,7 @@
 
 package strumbot
 
+import net.dv8tion.jda.api.utils.data.DataArray
 import net.dv8tion.jda.api.utils.data.DataObject
 import java.io.File
 import java.io.FileNotFoundException
@@ -28,7 +29,7 @@ data class Configuration(
     val messageLogs: String?,
     val ranks: Map<String, String>,
     val events: Set<String>,
-    val twitchUser: String
+    val twitchUser: Set<String>
 )
 
 
@@ -58,6 +59,9 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
         discord.getString("message_logs", null),
         roles,
         events,
-        twitch.getString("user_login")
+        twitch.optArray("user_login").orElseGet {
+            DataArray.empty()
+                .add(twitch.getString("user_login"))
+        }.map(Any::toString).toSet()
     )
 }

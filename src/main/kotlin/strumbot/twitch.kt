@@ -61,27 +61,33 @@ class TwitchApi(
         })
     }.publishOn(scheduler)
 
-    fun getStreamByLogin(login: String): Mono<Stream> = Mono.defer<Stream> {
+    fun getStreamByLogin(login: Collection<String>): Mono<List<Stream>> = Mono.defer<List<Stream>> {
+        val query = login.asSequence()
+            .map { "user_login=$it" }
+            .joinToString("&")
         val request = Request.Builder()
             .addHeader("Client-ID", clientId)
-            .url("https://api.twitch.tv/helix/streams?user_login=$login")
+            .url("https://api.twitch.tv/helix/streams?$query")
             .build()
 
         makeRequest(request) { response ->
             val data = body(response)
             if (data.isEmpty) {
-                null
+                emptyList()
             } else {
-                val stream = data.getObject(0)
-                Stream(
-                    stream.getString("id"),
-                    stream.getString("game_id"),
-                    stream.getString("title"),
-                    stream.getString("type"),
-                    stream.getString("thumbnail_url"),
-                    stream.getString("user_id"),
-                    OffsetDateTime.parse(stream.getString("started_at"))
-                )
+                List(data.length()) { i ->
+                    val stream = data.getObject(i)
+                    Stream(
+                        stream.getString("id"),
+                        stream.getString("game_id"),
+                        stream.getString("title"),
+                        stream.getString("type"),
+                        stream.getString("thumbnail_url"),
+                        stream.getString("user_id"),
+                        stream.getString("user_name"),
+                        OffsetDateTime.parse(stream.getString("started_at"))
+                    )
+                }
             }
         }
     }
@@ -208,6 +214,7 @@ data class Stream(
     val type: String,
     val thumbnail: String,
     val userId: String,
+    val userLogin: String,
     val startedAt: OffsetDateTime)
 data class Video(
     val id: String,

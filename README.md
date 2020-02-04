@@ -73,7 +73,7 @@ If you don't know how to make a twitch application and access the client_id: [Ho
   "twitch": {
     "client_id": "*******",
     "client_secret": "*******",
-    "user_login": "Elajjaz"
+    "user_login": ["Elajjaz", "Distortion2"]
   }
 }
 ```

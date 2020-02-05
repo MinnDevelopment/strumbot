@@ -208,7 +208,7 @@ class StreamWatcher(
     ): Mono<ReadonlyMessage> {
         val (stream, game, videoId, thumbnail) = tuple
         log.info("Stream started with game ${game.name} (${game.gameId})")
-        updateActivity(Activity.streaming(game.name, "https://www.twitch.tv/${userLogin}"))
+        updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
         streamStarted = stream.startedAt.toEpochSecond()
         currentElement = StreamElement(game, 0, videoId)
         return withPing("live") { mention ->
@@ -229,7 +229,7 @@ class StreamWatcher(
         return twitch.getGame(stream)
             .flatMap { game ->
                 log.info("Stream changed game ${currentElement?.game?.name} -> ${game.name}")
-                updateActivity(Activity.streaming(game.name, "https://www.twitch.tv/${userLogin}"))
+                updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
                 val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
                 currentElement = StreamElement(game, timestamp, videoId)
                 Mono.zip(game.toMono(), twitch.getThumbnail(stream))

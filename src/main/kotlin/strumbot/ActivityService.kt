@@ -41,8 +41,10 @@ class ActivityService(private val jda: JDA, private val pool: Scheduler) {
             .subscribe {
                 if (it.isEmpty())
                     jda.presence.activity = null
-                else
-                    jda.presence.activity = activities[currentIndex++ % it.size]
+                else activities[currentIndex++ % it.size].let { activity ->
+                    if (jda.presence.activity != activity)
+                        jda.presence.activity = activity
+                }
             }
     }
 }

@@ -33,6 +33,7 @@ import reactor.core.Exceptions
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toMono
+import reactor.core.scheduler.Scheduler
 import reactor.util.function.Tuple4
 import java.io.InputStream
 import java.net.SocketException
@@ -57,6 +58,27 @@ private val ignoredErrors = setOf<Class<*>>(
 
 fun suppressExpected(t: Throwable) = !Exceptions.isOverflow(t) && t::class.java !in ignoredErrors
 
+fun startTwitchService(
+    twitch: TwitchApi,
+    watchedStreams: Map<String, StreamWatcher>,
+    poolScheduler: Scheduler
+) {
+    log.info("Listening for stream(s) from ${watchedStreams.keys}")
+    Flux.interval(Duration.ZERO, Duration.ofSeconds(10), poolScheduler)
+        .flatMap { twitch.getStreamByLogin(watchedStreams.keys) }
+        .flatMapSequential { streams ->
+            Flux.merge(watchedStreams.map { entry ->
+                val (name, watcher) = entry
+                val stream = streams.find { it.userLogin.equals(name, true) }
+                watcher.handle(stream)
+            })
+        }
+        .doOnError(::suppressExpected) { log.error("Error in twitch stream service", it) }
+        .retry { it !is Error }
+        .doFinally { log.warn("Twitch service terminated unexpectedly with signal {}", it) }
+        .subscribe()
+}
+
 data class Timestamps(val display: String, val twitchFormat: String)
 data class StreamElement(val game: Game, val timestamp: Int, val videoId: String)
 
@@ -66,7 +88,8 @@ class StreamWatcher(
     private val configuration: Configuration,
     private val userLogin: String,
     private val pool: ScheduledExecutorService,
-    private val activityService: ActivityService) {
+    private val activityService: ActivityService
+) {
 
     @Volatile private var currentElement: StreamElement? = null
     private var offlineTimestamp = 0L

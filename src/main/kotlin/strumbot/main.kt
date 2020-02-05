@@ -45,7 +45,6 @@ import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.scheduler.Schedulers
 import java.lang.Integer.min
-import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool
 import kotlin.concurrent.thread
@@ -92,25 +91,13 @@ fun main() {
     }
 
     jda.awaitReady()
+
     val watchedStreams = mutableMapOf<String, StreamWatcher>()
     for (userLogin in configuration.twitchUser) {
         watchedStreams[userLogin] = StreamWatcher(twitch, jda, configuration, userLogin, pool, activityService)
     }
 
-    log.info("Listening for stream(s) from ${configuration.twitchUser}")
-    Flux.interval(Duration.ZERO, Duration.ofSeconds(10), poolScheduler)
-        .flatMap { twitch.getStreamByLogin(watchedStreams.keys) }
-        .flatMapSequential { streams ->
-            Flux.merge(watchedStreams.map { entry ->
-                val (name, watcher) = entry
-                val stream = streams.find { it.userLogin.equals(name, true) }
-                watcher.handle(stream)
-            })
-        }
-        .doOnError(::suppressExpected) { LoggerFactory.getLogger(StreamWatcher::class.java)?.error("Error in twitch stream service", it) }
-        .retry { it !is Error }
-        .doFinally { log.warn("Twitch service terminated unexpectedly with signal {}", it) }
-        .subscribe()
+    startTwitchService(twitch, watchedStreams, poolScheduler)
 }
 
 private fun setupRankCreator(jda: JDA, configuration: Configuration) {

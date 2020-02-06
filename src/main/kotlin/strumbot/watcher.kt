@@ -99,7 +99,7 @@ data class StreamElement(val game: Game, val timestamp: Int, val videoId: String
     fun toVodLink(comment: String = game.name): String {
         val (display, twitchFormat) = Timestamps.from(timestamp)
         val url = "${toVideoUrl()}?t=${twitchFormat}"
-        return "[${display}](${url}) $comment"
+        return "[`${display}`](${url}) $comment"
     }
 }
 

@@ -131,7 +131,7 @@ class StreamWatcher(
             when {
                 // 1. The stream was online and is now offline
                 // => Send offline notification (vod event)
-                stream == null -> handleOffline(webhook)
+                stream == null -> handleOffline()
 
                 // 2. The stream was online and has switched the game
                 // => Send update game notification (update event)
@@ -139,31 +139,29 @@ class StreamWatcher(
                     offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                     twitch.getVideoByStream(stream)
                         .map(Video::id)
-                        .flatMap { handleUpdate(stream, it, webhook) }
+                        .flatMap { handleUpdate(stream, it) }
                 }
 
                 // 3. The stream was online and has not switched the game
                 // => Do nothing
                 else -> {
                     offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
-                    Mono.empty<ReadonlyMessage>()
+                    Mono.empty()
                 }
             }
         } else {
             // 4. The stream was offline and has come online
             // => Send go live notification (live event)
             if (stream != null) {
+                offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                 val getStream = stream.toMono()
                 val getGame = twitch.getGame(stream)
                 val getVod = twitch.getVideoByStream(stream).map(Video::id)
                 val getThumbnail = twitch.getThumbnail(stream)
                 Mono.zip(getStream, getGame, getVod, getThumbnail)
-                    .flatMap { tuple ->
-                        offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
-                        handleGoLive(tuple, webhook)
-                    }
+                    .flatMap(this::handleGoLive)
             } else {
-                Mono.empty<ReadonlyMessage>()
+                Mono.empty()
             }
         }
     }
@@ -176,7 +174,7 @@ class StreamWatcher(
 
     /// EVENTS
 
-    private fun handleOffline(webhook: WebhookClient): Mono<ReadonlyMessage> {
+    private fun handleOffline(): Mono<ReadonlyMessage> {
         if (offlineTimestamp == 0L) {
             offlineTimestamp = OffsetDateTime.now().toEpochSecond()
             return Mono.empty()
@@ -218,10 +216,7 @@ class StreamWatcher(
             }
     }
 
-    private fun handleGoLive(
-        tuple: Tuple4<Stream, Game, String, InputStream>,
-        webhook: WebhookClient
-    ): Mono<ReadonlyMessage> {
+    private fun handleGoLive(tuple: Tuple4<Stream, Game, String, InputStream>): Mono<ReadonlyMessage> {
         val (stream, game, videoId, thumbnail) = tuple
         log.info("Stream started with game ${game.name} (${game.gameId})")
         updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
@@ -236,11 +231,7 @@ class StreamWatcher(
         }
     }
 
-    private fun handleUpdate(
-        stream: Stream,
-        videoId: String,
-        webhook: WebhookClient
-    ): Mono<ReadonlyMessage> {
+    private fun handleUpdate( stream: Stream, videoId: String): Mono<ReadonlyMessage> {
         timestamps.add(currentElement!!)
         return twitch.getGame(stream)
             .flatMap { game ->

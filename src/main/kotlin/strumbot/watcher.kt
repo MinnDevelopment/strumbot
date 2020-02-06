@@ -79,8 +79,29 @@ fun startTwitchService(
         .subscribe()
 }
 
-data class Timestamps(val display: String, val twitchFormat: String)
-data class StreamElement(val game: Game, val timestamp: Int, val videoId: String)
+data class Timestamps(val display: String, val twitchFormat: String) {
+    companion object {
+        fun from(timestamp: Int): Timestamps {
+            val duration = Duration.ofSeconds(timestamp.toLong())
+            val hours = duration.toHours()
+            val minutes = duration.minusHours(hours).toMinutes()
+            val seconds = duration.minusHours(hours).minusMinutes(minutes).toSeconds()
+            return Timestamps(
+                "%02d:%02d:%02d".format(hours, minutes, seconds),
+                "%02dh%02dm%02ds".format(hours, minutes, seconds))
+        }
+    }
+}
+
+data class StreamElement(val game: Game, val timestamp: Int, val videoId: String) {
+    fun toVideoUrl() = "https://www.twtich.tv/videos/${videoId}"
+
+    fun toVodLink(comment: String = game.name): String {
+        val (display, twitchFormat) = Timestamps.from(timestamp)
+        val url = "${toVideoUrl()}?t=${twitchFormat}"
+        return "[${display}](${url}) $comment"
+    }
+}
 
 class StreamWatcher(
     private val twitch: TwitchApi,
@@ -95,7 +116,6 @@ class StreamWatcher(
     private var offlineTimestamp = 0L
     private var streamStarted = 0L
     private var currentActivity: Activity? = null
-    private val rankByType: MutableMap<String, String> = mutableMapOf()
     private val timestamps: MutableList<StreamElement> = mutableListOf()
     private val webhook: WebhookClient by lazy {
         WebhookClientBuilder(configuration.streamNotifications)
@@ -174,22 +194,18 @@ class StreamWatcher(
         this.timestamps.clear()
 
         return Flux.fromIterable(timestamps)
-            .map {
-                val url = "https://www.twitch.tv/videos/${it.videoId}"
-                val (timestamp, twitchTimestamp) = toTwitchTimestamp(it.timestamp)
-                "[`$timestamp`]($url?t=$twitchTimestamp) ${it.game.name}"
-            }
+            .map { it.toVodLink() }
             .reduce(StringBuilder()) { a, b -> a.append("\n").append(b) }
-            .flatMap { Mono.zip(it.toMono(), twitch.getVideoById(videoId)) }
+            .zipWhen { twitch.getVideoById(videoId) }
             .flatMap { Mono.zip(it.t1.toMono(), it.t2.toMono(), twitch.getThumbnail(it.t2)) }
             .flatMap {
                 val (index, video, thumbnail) = it
-                val videoUrl = "https://www.twitch.tv/videos/${firstSegment.videoId}"
+                val videoUrl = firstSegment.toVideoUrl()
                 val embed = makeEmbedBase(video.title, videoUrl)
                 embed.addField(EmbedField(false, "Time Stamps", index.toString()))
 
                 withPing("vod") { mention ->
-                    val (_, duration) = toTwitchTimestamp((offlineTimestamp - streamStarted).toInt())
+                    val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
                     val message = WebhookMessageBuilder()
                         .setContent("$mention VOD [$duration]")
                         .setUsername(HOOK_NAME)
@@ -237,7 +253,7 @@ class StreamWatcher(
             .flatMap { tuple ->
                 val (game, thumbnail) = tuple
                 withPing("update") { mention ->
-                    val embed = makeEmbed(stream, game, thumbnail, userLogin)
+                    val embed = makeEmbed(stream, game, thumbnail, userLogin, currentElement)
                         .setContent("$mention $userLogin switched game to **${game.name}**!")
                         .setUsername(HOOK_NAME)
                         .build()
@@ -247,17 +263,6 @@ class StreamWatcher(
     }
 
     /// HELPERS
-
-    // Convert seconds to readable timestamp
-    private fun toTwitchTimestamp(timestamp: Int): Timestamps {
-        val duration = Duration.ofSeconds(timestamp.toLong())
-        val hours = duration.toHours()
-        val minutes = duration.minusHours(hours).toMinutes()
-        val seconds = duration.minusHours(hours).minusMinutes(minutes).toSeconds()
-        return Timestamps(
-            "%02d:%02d:%02d".format(hours, minutes, seconds),
-            "%02dh%02dm%02ds".format(hours, minutes, seconds))
-    }
 
     // Run callback with mentionable role
     private inline fun <T> withPing(type: String, crossinline block: (String) -> Mono<T>): Mono<T> {
@@ -300,7 +305,8 @@ private fun makeEmbed(
     stream: Stream,
     game: Game,
     thumbnail: InputStream,
-    twitchName: String
+    twitchName: String,
+    currentSegment: StreamElement? = null
 ): WebhookMessageBuilder {
     val embed = makeEmbedBase(stream.title, "https://www.twitch.tv/$twitchName").let { builder ->
         builder.addField(
@@ -313,6 +319,9 @@ private fun makeEmbed(
                 true, "Started At", stream.startedAt.format(DateTimeFormatter.RFC_1123_DATE_TIME)
             )
         )
+        if (currentSegment != null) {
+            builder.setDescription("Start watching at ${currentSegment.toVodLink("")}")
+        }
         builder.build()
     }
 

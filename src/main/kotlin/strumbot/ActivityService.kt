@@ -39,11 +39,14 @@ class ActivityService(private val jda: JDA, private val pool: Scheduler) {
         Flux.interval(Duration.ofSeconds(5), Duration.ofSeconds(15), pool)
             .map { activities }
             .subscribe {
-                if (it.isEmpty())
-                    jda.presence.activity = null
-                else activities[currentIndex++ % it.size].let { activity ->
-                    if (jda.presence.activity != activity)
-                        jda.presence.activity = activity
+                if (it.isEmpty()) {
+                    if (jda.presence.activity != null)
+                        jda.presence.activity = null
+                } else {
+                    activities[currentIndex++ % it.size].let { activity ->
+                        if (jda.presence.activity != activity)
+                            jda.presence.activity = activity
+                    }
                 }
             }
     }

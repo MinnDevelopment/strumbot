@@ -24,7 +24,7 @@ import java.io.FileNotFoundException
 data class Configuration(
     val token: String,
     val twitchClientId: String,
-    val twitchClientSecret: String,
+//    val twitchClientSecret: String,
     val streamNotifications: String,
     val messageLogs: String?,
     val ranks: Map<String, String>,
@@ -54,7 +54,7 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
     return Configuration(
         discord.getString("token"),
         twitch.getString("client_id"),
-        twitch.getString("client_secret"),
+//        twitch.getString("client_secret"),
         discord.getString("stream_notifications"),
         discord.getString("message_logs", null),
         roles,

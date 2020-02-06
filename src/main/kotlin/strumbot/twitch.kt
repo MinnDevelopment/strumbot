@@ -34,8 +34,8 @@ class HttpException(route: String, status: Int, meaning: String)
 class TwitchApi(
     private val http: OkHttpClient,
     private val scheduler: Scheduler,
-    private val clientId: String,
-    private val clientSecret: String) {
+    private val clientId: String/*,
+    private val clientSecret: String*/) {
 
     private val games = FixedSizeMap<String, Game>(10)
 

@@ -94,7 +94,7 @@ data class Timestamps(val display: String, val twitchFormat: String) {
 }
 
 data class StreamElement(val game: Game, val timestamp: Int, val videoId: String) {
-    fun toVideoUrl() = "https://www.twtich.tv/videos/${videoId}"
+    fun toVideoUrl() = "https://www.twitch.tv/videos/${videoId}"
 
     fun toVodLink(comment: String = game.name): String {
         val (display, twitchFormat) = Timestamps.from(timestamp)

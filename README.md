@@ -52,7 +52,7 @@ This configuration section contains required information to track the stream sta
 If you don't know how to make a twitch application and access the client_id: [How to make a twitch app](https://github.com/MinnDevelopment/strumbot/blob/master/guides/HOW_TO_CREATE_A_TWITCH_APP.md)
 
 - `client_id` The twitch application's client_id
-- `client_secret` The twitch application's client_secret (currently unused)
+- `client_secret` The twitch application's client_secret
 - `user_login` The username of the tracked streamer
 
 ### Example

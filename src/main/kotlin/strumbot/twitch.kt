@@ -29,13 +29,46 @@ import java.io.InputStream
 import java.time.OffsetDateTime
 
 class HttpException(route: String, status: Int, meaning: String)
-    : Exception("$route > $status: $meaning")
+    : Exception("$route > $status: $meaning") {
+    constructor(response: Response): this(response.request().url().toString(), response.code(), response.message())
+}
+
+private val emptyFormBody = RequestBody.create(MediaType.parse("form-data"), "")
+
+fun createTwitchApi(http: OkHttpClient, scheduler: Scheduler, clientId: String, clientSecret: String): Mono<TwitchApi> = Mono.create { sink ->
+    val request = Request.Builder()
+        .url("https://id.twitch.tv/oauth2/token" +
+                "?client_id=${clientId}" +
+                "&client_secret=${clientSecret}" +
+                "&grant_type=client_credentials")
+        .method("POST", emptyFormBody)
+        .build()
+
+    http.newCall(request).enqueue(object : Callback {
+        override fun onFailure(call: Call, e: IOException) {
+            sink.error(e)
+        }
+
+        override fun onResponse(call: Call, response: Response) {
+            if (!response.isSuccessful) {
+                sink.error(HttpException(response))
+                return
+            }
+
+            val json = DataObject.fromJson(response.body()!!.byteStream())
+            val accessToken = json.getString("access_token")
+            sink.success(TwitchApi(
+                http, scheduler,
+                clientId, accessToken))
+        }
+    })
+}
 
 class TwitchApi(
     private val http: OkHttpClient,
     private val scheduler: Scheduler,
-    private val clientId: String/*,
-    private val clientSecret: String*/) {
+    private val clientId: String,
+    private var accessToken: String) {
 
     private val games = FixedSizeMap<String, Game>(10)
 
@@ -50,25 +83,25 @@ class TwitchApi(
                     if (response.isSuccessful) {
                         sink.success(handler(response))
                     } else {
-                        sink.error(HttpException(
-                            response.request().url().toString(),
-                            response.code(),
-                            response.message()
-                        ))
+                        sink.error(HttpException(response))
                     }
                 }
             }
         })
     }.publishOn(scheduler)
 
-    fun getStreamByLogin(login: Collection<String>): Mono<List<Stream>> = Mono.defer<List<Stream>> {
+    private fun newRequest(url: String): Request.Builder {
+        return Request.Builder()
+            .url(url)
+            .addHeader("Client-ID", clientId)
+            .addHeader("Authorization", "OAuth $accessToken")
+    }
+
+    fun getStreamByLogin(login: Collection<String>): Mono<List<Stream>> = Mono.defer {
         val query = login.asSequence()
             .map { "user_login=$it" }
             .joinToString("&")
-        val request = Request.Builder()
-            .addHeader("Client-ID", clientId)
-            .url("https://api.twitch.tv/helix/streams?$query")
-            .build()
+        val request = newRequest("https://api.twitch.tv/helix/streams?$query").build()
 
         makeRequest(request) { response ->
             val data = body(response)
@@ -92,15 +125,12 @@ class TwitchApi(
         }
     }
 
-    fun getGame(stream: Stream): Mono<Game> = Mono.defer<Game> {
+    fun getGame(stream: Stream): Mono<Game> = Mono.defer {
         if (stream.gameId in games) {
             return@defer games[stream.gameId].toMono()
         }
 
-        val request = Request.Builder()
-            .addHeader("Client-ID", clientId)
-            .url("https://api.twitch.tv/helix/games?id=${stream.gameId}")
-            .build()
+        val request = newRequest("https://api.twitch.tv/helix/games?id=${stream.gameId}").build()
 
         makeRequest(request) { response ->
             val data = body(response)
@@ -118,11 +148,8 @@ class TwitchApi(
         }
     }
 
-    fun getUserIdByLogin(login: String): Mono<String> = Mono.defer<String> {
-        val request = Request.Builder()
-            .addHeader("Client-Id", clientId)
-            .url("https://api.twitch.tv/helix/users?login=$login")
-            .build()
+    fun getUserIdByLogin(login: String): Mono<String> = Mono.defer {
+        val request = newRequest("https://api.twitch.tv/helix/users?login=$login").build()
 
         makeRequest(request) { response ->
             val data = body(response)
@@ -133,23 +160,17 @@ class TwitchApi(
         }
     }
 
-    fun getVideoById(id: String): Mono<Video> = Mono.defer<Video> {
-        val request = Request.Builder()
-            .addHeader("Client-Id", clientId)
-            .url("https://api.twitch.tv/helix/videos?id=$id")
-            .build()
+    fun getVideoById(id: String): Mono<Video> = Mono.defer {
+        val request = newRequest("https://api.twitch.tv/helix/videos?id=$id").build()
 
         makeRequest(request) { response ->
             handleVideo(response)
         }
     }
 
-    fun getVideoByStream(stream: Stream): Mono<Video> = Mono.defer<Video> {
+    fun getVideoByStream(stream: Stream): Mono<Video> = Mono.defer {
         val userId = stream.userId
-        val request = Request.Builder()
-            .addHeader("Client-Id", clientId)
-            .url("https://api.twitch.tv/helix/videos?user_id=$userId")
-            .build()
+        val request = newRequest("https://api.twitch.tv/helix/videos?user_id=$userId").build()
 
         makeRequest(request) { response ->
             val data = body(response)
@@ -168,7 +189,7 @@ class TwitchApi(
 
     fun getThumbnail(stream: Stream, width: Int = 1920, height: Int = 1080): Mono<InputStream> = getThumbnail(stream.thumbnail, width, height)
     fun getThumbnail(video: Video, width: Int = 1920, height: Int = 1080): Mono<InputStream> = getThumbnail(video.thumbnail, width, height)
-    fun getThumbnail(url: String, width: Int, height: Int): Mono<InputStream> = Mono.defer<InputStream> {
+    fun getThumbnail(url: String, width: Int, height: Int): Mono<InputStream> = Mono.defer {
         // Stream url uses {width} and video url uses %{width} ??????????????? OK TWITCH ???????????
         val thumbnailUrl = url.replace(Regex("%?\\{width}"), width.toString())
                               .replace(Regex("%?\\{height}"), height.toString()) + "?v=${System.currentTimeMillis()}" // add random number to avoid cache!

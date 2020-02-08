@@ -62,7 +62,8 @@ private val poolScheduler = Schedulers.fromExecutor(pool)
 fun main() {
     val configuration = loadConfiguration("config.json")
     val okhttp = OkHttpClient()
-    val twitch = TwitchApi(okhttp, poolScheduler, configuration.twitchClientId)
+    log.info("Initializing twitch api")
+    val twitch = createTwitchApi(okhttp, poolScheduler, configuration.twitchClientId, configuration.twitchClientSecret).block()
 
     val manager = createManager {
         this.scheduler = poolScheduler

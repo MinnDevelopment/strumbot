@@ -18,8 +18,8 @@
 package strumbot
 
 import club.minnced.jda.reactor.asMono
-import club.minnced.jda.reactor.createManager
 import club.minnced.jda.reactor.on
+import club.minnced.jda.reactor.reactive
 import club.minnced.jda.reactor.then
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
@@ -65,12 +65,9 @@ fun main() {
     log.info("Initializing twitch api")
     val twitch = createTwitchApi(okhttp, poolScheduler, configuration.twitchClientId, configuration.twitchClientSecret).block()!!
 
-    val manager = createManager {
-        this.scheduler = poolScheduler
-    }
-
+    log.info("Initializing discord connection")
     val jda = JDABuilder.createLight(configuration.token, GatewayIntent.GUILD_MESSAGES)
-        .setEventManager(manager)
+        .reactive { this.scheduler = poolScheduler }
         .setHttpClient(okhttp)
         .setCallbackPool(pool)
         .setGatewayPool(pool)

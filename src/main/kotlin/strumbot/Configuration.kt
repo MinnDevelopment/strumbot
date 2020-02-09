@@ -18,6 +18,7 @@ package strumbot
 
 import net.dv8tion.jda.api.utils.data.DataArray
 import net.dv8tion.jda.api.utils.data.DataObject
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileNotFoundException
 
@@ -32,12 +33,17 @@ data class Configuration(
     val twitchUser: Set<String>
 )
 
+private val log = LoggerFactory.getLogger(Configuration::class.java)
 
 fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.json"): Configuration {
     val json = try {
-        DataObject.fromJson(File(path).reader())
+        DataObject.fromJson(File(path).reader()).also {
+            log.info("Loaded config from $path")
+        }
     } catch (ex: FileNotFoundException) {
-        DataObject.fromJson(File(fallback).reader())
+        DataObject.fromJson(File(fallback).reader()).also {
+            log.info("Loaded config from $fallback")
+        }
     }
 
     val discord = json.getObject("discord")

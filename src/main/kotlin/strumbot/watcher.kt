@@ -63,7 +63,13 @@ fun startTwitchService(
     watchedStreams: Map<String, StreamWatcher>,
     poolScheduler: Scheduler
 ) {
-    log.info("Listening for stream(s) from ${watchedStreams.keys}")
+    log.info("Listening for stream(s) from {}",
+        if (watchedStreams.size == 1)
+            watchedStreams.keys.first()
+        else
+            watchedStreams.keys.toString()
+    )
+
     Flux.interval(Duration.ZERO, Duration.ofSeconds(10), poolScheduler)
         .flatMap { twitch.getStreamByLogin(watchedStreams.keys) }
         .flatMapSequential { streams ->
@@ -182,7 +188,7 @@ class StreamWatcher(
             return Mono.empty()
         }
 
-        log.info("Stream went offline!")
+        log.info("Stream from $userLogin went offline!")
         updateActivity(null)
         timestamps.add(currentElement!!)
         val videoId = currentElement!!.videoId
@@ -218,7 +224,7 @@ class StreamWatcher(
 
     private fun handleGoLive(tuple: Tuple4<Stream, Game, String, InputStream>): Mono<ReadonlyMessage> {
         val (stream, game, videoId, thumbnail) = tuple
-        log.info("Stream started with game ${game.name} (${game.gameId})")
+        log.info("Stream from $userLogin started with game ${game.name} (${game.gameId})")
         updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
         streamStarted = stream.startedAt.toEpochSecond()
         currentElement = StreamElement(game, 0, videoId)
@@ -235,7 +241,7 @@ class StreamWatcher(
         timestamps.add(currentElement!!)
         return twitch.getGame(stream)
             .flatMap { game ->
-                log.info("Stream changed game ${currentElement?.game?.name} -> ${game.name}")
+                log.info("Stream from $userLogin changed game ${currentElement?.game?.name} -> ${game.name}")
                 updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
                 val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
                 currentElement = StreamElement(game, timestamp, videoId)

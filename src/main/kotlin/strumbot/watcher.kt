@@ -200,7 +200,7 @@ class StreamWatcher(
                 val (index, video, thumbnail) = it
                 val videoUrl = firstSegment.toVideoUrl()
                 val embed = makeEmbedBase(video.title, videoUrl)
-                embed.addField(EmbedField(false, "Time Stamps", index.toString()))
+                appendIndex(index, embed)
 
                 withPing("vod") { mention ->
                     val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
@@ -279,6 +279,40 @@ class StreamWatcher(
             Mono.fromFuture { block(this) }
         } else {
             Mono.empty()
+        }
+    }
+
+    // Add timestamp index for vod (possibly split up into multiple fields)
+    private fun appendIndex(index: StringBuilder,embed: WebhookEmbedBuilder) {
+        // Remove leading whitespace (from reduce step)
+        if (index[0] == '\n')
+            index.deleteCharAt(0)
+        if (index.length > 1000) { // we are limited by the capacity of the field
+            while (index.isNotEmpty()) {
+                // Build chunks of maximum 1000 bytes each
+                val chunk = buildString {
+                    while (index.isNotEmpty()) {
+                        var nextNewLine = index.indexOf('\n')
+                        if (nextNewLine <= 0)
+                            nextNewLine = index.length
+
+                        val line = index.substring(0, nextNewLine)
+                        // Check if line would exceed capacity
+                        if (length + line.length >= 1000)
+                            break
+                        append("\n").append(line)
+                        index.delete(0, nextNewLine + 1)
+                    }
+
+                    // Trim leading linefeed
+                    deleteCharAt(0)
+                }
+
+                // Add inline fields (3 per row)
+                embed.addField(EmbedField(true, "Time Stamps", chunk))
+            }
+        } else {
+            embed.addField(EmbedField(false, "Time Stamps", index.toString()))
         }
     }
 }

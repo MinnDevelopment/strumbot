@@ -36,15 +36,16 @@ data class Configuration(
 private val log = LoggerFactory.getLogger(Configuration::class.java)
 
 fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.json"): Configuration {
+    var file: File
     val json = try {
-        DataObject.fromJson(File(path).reader()).also {
-            log.info("Loaded config from $path")
-        }
+        file = File(path)
+        DataObject.fromJson(file.reader())
     } catch (ex: FileNotFoundException) {
-        DataObject.fromJson(File(fallback).reader()).also {
-            log.info("Loaded config from $fallback")
-        }
+        file = File(fallback)
+        DataObject.fromJson(file.reader())
     }
+
+    log.info("Loaded config from ${file.canonicalPath}")
 
     val discord = json.getObject("discord")
     val twitch = json.getObject("twitch")

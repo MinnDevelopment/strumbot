@@ -17,9 +17,13 @@
 package strumbot
 
 import net.dv8tion.jda.api.JDA
+import net.dv8tion.jda.api.requests.RestAction
 import reactor.util.function.Tuple2
 import reactor.util.function.Tuple3
 import reactor.util.function.Tuple4
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
+import kotlin.coroutines.suspendCoroutine
 
 operator fun <T> Tuple2<T, *>.component1(): T = t1
 operator fun <T> Tuple2<*, T>.component2(): T = t2
@@ -43,4 +47,15 @@ fun JDA.getRoleByType(configuration: Configuration, type: String): String {
         rankByType[type] = roleId
     }
     return rankByType[type] ?: "0"
+}
+
+suspend fun RestAction<*>.awaitUnit() = suspendCoroutine<Unit> { cont ->
+    queue(
+        { cont.resume(Unit) },
+        { cont.resumeWithException(it) }
+    )
+}
+
+suspend fun <T> RestAction<T>.awaitSingle() = suspendCoroutine<T> { cont ->
+    queue(cont::resume, cont::resumeWithException)
 }

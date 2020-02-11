@@ -27,6 +27,8 @@ dependencies {
     implementation("club.minnced:jda-reactor:1.0.0")
     implementation("club.minnced:discord-webhooks:0.2.0")
     implementation(kotlin("stdlib-jdk8"))
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.3.2")
 }
 
 val clean by tasks

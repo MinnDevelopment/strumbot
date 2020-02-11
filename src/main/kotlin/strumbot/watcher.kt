@@ -24,6 +24,8 @@ import club.minnced.discord.webhook.send.WebhookEmbedBuilder
 import club.minnced.discord.webhook.send.WebhookMessageBuilder
 import club.minnced.jda.reactor.asMono
 import club.minnced.jda.reactor.then
+import kotlinx.coroutines.reactive.awaitFirst
+import kotlinx.coroutines.reactor.mono
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.Activity
@@ -197,29 +199,29 @@ class StreamWatcher(
         val firstSegment = timestamps.first()
         this.timestamps.clear()
 
-        return Flux.fromIterable(timestamps)
-            .map { it.toVodLink() }
-            .reduce(StringBuilder()) { a, b -> a.append("\n").append(b) }
-            .zipWhen { twitch.getVideoById(videoId) }
-            .flatMap { Mono.zip(it.t1.toMono(), it.t2.toMono(), twitch.getThumbnail(it.t2)) }
-            .flatMap {
-                val (index, video, thumbnail) = it
-                val videoUrl = firstSegment.toVideoUrl()
-                val embed = makeEmbedBase(video.title, videoUrl)
-                appendIndex(index, embed)
+        return mono {
+            val index = timestamps.asSequence()
+                                  .map { it.toVodLink() }
+                                  .fold(StringBuilder()) { a, b -> a.append('\n').append(b) }
 
-                withPing("vod") { mention ->
-                    val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
-                    val message = WebhookMessageBuilder()
-                        .setContent("$mention VOD [$duration]")
-                        .setUsername(HOOK_NAME)
-                        .addEmbeds(embed.build())
-                        .addFile("thumbnail.jpg", thumbnail)
-                        .build()
+            val video = twitch.getVideoById(videoId).awaitFirst()
+            val thumbnail = twitch.getThumbnail(video).awaitFirst()
+            val videoUrl = firstSegment.toVideoUrl()
+            val embed = makeEmbedBase(video.title, videoUrl)
+            appendIndex(index, embed)
 
-                    webhook.fireEvent("vod") { send(message) }
-                }
-            }
+            withPing("vod") { mention ->
+                val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
+                val message = WebhookMessageBuilder()
+                    .setContent("$mention VOD [$duration]")
+                    .setUsername(HOOK_NAME)
+                    .addEmbeds(embed.build())
+                    .addFile("thumbnail.jpg", thumbnail)
+                    .build()
+
+                webhook.fireEvent("vod") { send(message) }
+            }.awaitFirst()
+        }
     }
 
     private fun handleGoLive(tuple: Tuple4<Stream, Game, String, InputStream>): Mono<ReadonlyMessage> {
@@ -239,24 +241,22 @@ class StreamWatcher(
 
     private fun handleUpdate( stream: Stream, videoId: String): Mono<ReadonlyMessage> {
         timestamps.add(currentElement!!)
-        return twitch.getGame(stream)
-            .flatMap { game ->
-                log.info("Stream from $userLogin changed game ${currentElement?.game?.name} -> ${game.name}")
-                updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
-                val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
-                currentElement = StreamElement(game, timestamp, videoId)
-                Mono.zip(game.toMono(), twitch.getThumbnail(stream))
-            }
-            .flatMap { tuple ->
-                val (game, thumbnail) = tuple
-                withPing("update") { mention ->
-                    val embed = makeEmbed(stream, game, thumbnail, userLogin, currentElement)
-                        .setContent("$mention $userLogin switched game to **${game.name}**!")
-                        .setUsername(HOOK_NAME)
-                        .build()
-                    webhook.fireEvent("update") { send(embed) }
-                }
-            }
+        return mono {
+            val game = twitch.getGame(stream).awaitFirst()
+            log.info("Stream from $userLogin changed game ${currentElement?.game?.name} -> ${game.name}")
+            updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
+            val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
+            currentElement = StreamElement(game, timestamp, videoId)
+            val thumbnail = twitch.getThumbnail(stream).awaitFirst()
+
+            withPing("update") { mention ->
+                val embed = makeEmbed(stream, game, thumbnail, userLogin, currentElement)
+                    .setContent("$mention $userLogin switched game to **${game.name}**!")
+                    .setUsername(HOOK_NAME)
+                    .build()
+                webhook.fireEvent("update") { send(embed) }
+            }.awaitFirst()
+        }
     }
 
     /// HELPERS

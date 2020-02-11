@@ -44,14 +44,14 @@ import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.scheduler.Schedulers
-import java.lang.Integer.min
+import java.lang.Integer.max
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool
 import kotlin.concurrent.thread
 
 private val log = LoggerFactory.getLogger("Main") as Logger
 
-fun getThreadCount(): Int = min(2, ForkJoinPool.getCommonPoolParallelism())
+fun getThreadCount(): Int = max(2, ForkJoinPool.getCommonPoolParallelism())
 
 private val pool = Executors.newScheduledThreadPool(getThreadCount()) {
     thread(start=false, name="Worker-Thread", isDaemon=true, block=it::run)

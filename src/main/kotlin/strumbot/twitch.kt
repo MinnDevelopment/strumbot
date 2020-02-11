@@ -160,8 +160,9 @@ class TwitchApi(
         }
     }
 
-    fun getVideoById(id: String): Mono<Video> = Mono.defer {
-        val request = newRequest("https://api.twitch.tv/helix/videos?id=$id").build()
+    fun getVideoById(id: String, type: String? = "archive"): Mono<Video> = Mono.defer {
+        val url = "https://api.twitch.tv/helix/videos?id=$id" + if (type != null) "&type=$type" else ""
+        val request = newRequest(url).build()
 
         makeRequest(request) { response ->
             handleVideo(response)
@@ -170,7 +171,12 @@ class TwitchApi(
 
     fun getVideoByStream(stream: Stream): Mono<Video> = Mono.defer {
         val userId = stream.userId
-        val request = newRequest("https://api.twitch.tv/helix/videos?user_id=$userId").build()
+        val request = newRequest(
+            "https://api.twitch.tv/helix/videos" +
+                "?type=archive" + // archive = vod
+                "&first=5" + // check 5 most recent videos, just in case it might ignore my type (default 20)
+                "&user_id=$userId"
+        ).build()
 
         makeRequest(request) { response ->
             val data = body(response)

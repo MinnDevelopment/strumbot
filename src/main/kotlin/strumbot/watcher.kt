@@ -239,7 +239,7 @@ class StreamWatcher(
         }
     }
 
-    private fun handleUpdate( stream: Stream, videoId: String): Mono<ReadonlyMessage> {
+    private fun handleUpdate(stream: Stream, videoId: String): Mono<ReadonlyMessage> {
         timestamps.add(currentElement!!)
         return mono {
             val game = twitch.getGame(stream).awaitFirst()

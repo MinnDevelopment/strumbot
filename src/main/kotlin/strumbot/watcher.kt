@@ -22,12 +22,9 @@ import club.minnced.discord.webhook.receive.ReadonlyMessage
 import club.minnced.discord.webhook.send.WebhookEmbed.*
 import club.minnced.discord.webhook.send.WebhookEmbedBuilder
 import club.minnced.discord.webhook.send.WebhookMessageBuilder
-import club.minnced.jda.reactor.asMono
-import club.minnced.jda.reactor.then
 import kotlinx.coroutines.reactive.awaitFirst
 import kotlinx.coroutines.reactor.mono
 import net.dv8tion.jda.api.JDA
-import net.dv8tion.jda.api.Permission
 import net.dv8tion.jda.api.entities.Activity
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -262,21 +259,9 @@ class StreamWatcher(
     /// HELPERS
 
     // Run callback with mentionable role
-    private inline fun <T> withPing(type: String, crossinline block: (String) -> Mono<T>): Mono<T> {
+    private inline fun <T> withPing(type: String, block: (String) -> Mono<T>): Mono<T> {
         val roleId = jda.getRoleByType(configuration, type)
-        val role = jda.getRoleById(roleId) ?: return block("")
-        val guild = role.guild
-        if (!guild.selfMember.hasPermission(Permission.MANAGE_ROLES)) {
-            // we were missing permissions to make it mentionable but we can still try to mention it
-            return block("<@&$roleId>")
-        }
-
-        return role.manager.setMentionable(true).asMono()
-            .then { block("<@&$roleId>") }
-            .flatMap { result ->
-                val notMentionable = role.manager.setMentionable(false).asMono()
-                notMentionable.thenReturn(result)
-            }
+        return block("<@&$roleId>")
     }
 
     // Fire webhook event if enabled in the configuration

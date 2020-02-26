@@ -98,7 +98,7 @@ data class Timestamps(val display: String, val twitchFormat: String) {
     }
 }
 
-data class StreamElement(val game: Game, val timestamp: Int, val videoId: String) {
+data class StreamElement(val game: Game, val timestamp: Int, var videoId: String) {
     fun toVideoUrl() = "https://www.twitch.tv/videos/${videoId}"
 
     fun toVodLink(comment: String = game.name): String {
@@ -143,7 +143,7 @@ class StreamWatcher(
                 stream.gameId != currentElement?.game?.gameId -> {
                     offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                     twitch.getVideoByStream(stream)
-                        .map(Video::id)
+                        .map(Video::id).switchIfEmpty("".toMono())
                         .flatMap { handleUpdate(stream, it) }
                 }
 
@@ -151,7 +151,14 @@ class StreamWatcher(
                 // => Do nothing
                 else -> {
                     offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
-                    Mono.empty()
+                    if (currentElement?.videoId == "") { // if twitch failed to provide a vod link try updating it
+                        twitch.getVideoByStream(stream)
+                            .map(Video::id)
+                            .flatMap {
+                                currentElement?.apply { videoId = it }
+                                Mono.empty<ReadonlyMessage>()
+                            }
+                    } else Mono.empty()
                 }
             }
         } else {
@@ -161,7 +168,7 @@ class StreamWatcher(
                 offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                 val getStream = stream.toMono()
                 val getGame = twitch.getGame(stream)
-                val getVod = twitch.getVideoByStream(stream).map(Video::id)
+                val getVod = twitch.getVideoByStream(stream).map(Video::id).switchIfEmpty("".toMono())
                 val getThumbnail = twitch.getThumbnail(stream)
                 Mono.zip(getStream, getGame, getVod, getThumbnail)
                     .flatMap(this::handleGoLive)

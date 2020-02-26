@@ -76,6 +76,7 @@ class TwitchApi(
         private val log: Logger = LoggerFactory.getLogger(TwitchApi::class.java)
     }
 
+    private val warnedMissingVod = mutableSetOf<String>()
     private val games = FixedSizeMap<String, Game>(10)
 
     private fun <T> makeRequest(request: Request, handler: (Response) -> T?): Mono<T> = Mono.create<T> { sink ->
@@ -196,7 +197,8 @@ class TwitchApi(
                     return@makeRequest buildVideo(video)
                 }
             }
-            log.warn("Could not find vod for current stream by ${stream.userLogin}. Did you enable archives?")
+            if (warnedMissingVod.add(stream.userLogin))
+                log.warn("Could not find vod for current stream by ${stream.userLogin}. Did you enable archives?")
             return@makeRequest null
         }
     }

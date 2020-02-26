@@ -82,7 +82,7 @@ fun main() {
     setupRankListener(jda, configuration)
     // Optional message logging
     configuration.messageLogs?.let { messageWebhook ->
-        MessageLogger(messageWebhook, pool, jda)
+        MessageLogger(messageWebhook, pool, jda, configuration)
     }
 
     jda.awaitReady()
@@ -103,6 +103,7 @@ private fun setupRankCreator(jda: JDA, configuration: Configuration) {
 
     val ranks = configuration.ranks.values
     listener
+        .filter { filterId(it, configuration.guildId) }
         .flatMap { guild ->
             ranks.toFlux()
                  .filter { guild.getRolesByName(it, true).isEmpty() }
@@ -118,6 +119,7 @@ private fun setupRankListener(jda: JDA, configuration: Configuration) {
     val messages = FixedSizeMap<Long, MessagePath>(10)
 
     jda.on<GuildMessageReceivedEvent>()
+        .filter { filterId(it.guild, configuration.guildId) }
         .map { it.message }
         .filter { it.member != null }
         .filter { it.contentRaw.startsWith("?rank ") }

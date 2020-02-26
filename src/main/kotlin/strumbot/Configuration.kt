@@ -28,6 +28,7 @@ data class Configuration(
     val twitchClientSecret: String,
     val streamNotifications: String,
     val messageLogs: String?,
+    val guildId: Long,
     val ranks: Map<String, String>,
     val events: Set<String>,
     val twitchUser: Set<String>
@@ -64,6 +65,7 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
         twitch.getString("client_secret"),
         discord.getString("stream_notifications"),
         discord.getString("message_logs", null),
+        discord.getLong("server_id", 0L),
         roles,
         events,
         twitch.optArray("user_login").orElseGet {

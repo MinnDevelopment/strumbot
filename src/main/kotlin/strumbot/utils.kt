@@ -17,6 +17,7 @@
 package strumbot
 
 import net.dv8tion.jda.api.JDA
+import net.dv8tion.jda.api.entities.Guild
 import net.dv8tion.jda.api.requests.RestAction
 import reactor.util.function.Tuple2
 import reactor.util.function.Tuple3
@@ -40,10 +41,15 @@ operator fun <T> Tuple4<*, *, *, T>.component4(): T = t4
 // Convert role type to role id
 private val rankByType: MutableMap<String, String> = mutableMapOf()
 
+fun filterId(guild: Guild, id: Long) = guild.idLong == id || id == 0L
+
 fun JDA.getRoleByType(configuration: Configuration, type: String): String {
     val roleName = configuration.ranks[type] ?: "0"
     if (type !in rankByType) {
-        val roleId = getRolesByName(roleName, true).firstOrNull()?.id ?: return "0"
+        // Find role by name
+        val roleId = getRolesByName(roleName, true)
+            .firstOrNull { filterId(it.guild, configuration.guildId) } // filter by server id (if applicable)
+            ?.id ?: return "0" // take id or return "0" as fallback
         rankByType[type] = roleId
     }
     return rankByType[type] ?: "0"

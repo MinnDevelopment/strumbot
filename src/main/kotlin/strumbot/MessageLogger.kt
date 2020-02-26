@@ -40,7 +40,7 @@ const val DELETE_COLOR = 0xFF0000
 
 class MessageLogger(
     private val webhookUrl: String, private val pool: ScheduledExecutorService,
-    private val jda: JDA) {
+    private val jda: JDA, private val config: Configuration) {
 
     private val messageCache = FixedSizeMap<Long, DiscordMessage>(50)
     private val webhook: WebhookClient by lazy {
@@ -53,6 +53,7 @@ class MessageLogger(
 
     init {
         jda.on<MessageReceivedEvent>()
+           .filter { it.isFromGuild && filterId(it.guild, config.guildId) }
            .subscribe {
                val message = DiscordMessage(
                    it.author.id,
@@ -64,6 +65,7 @@ class MessageLogger(
            }
 
         jda.on<MessageUpdateEvent>()
+           .filter { it.isFromGuild && filterId(it.guild, config.guildId) }
            .filter { it.messageIdLong in messageCache }
            .filter { it.message.timeEdited != null }
            .filter { it.message.contentRaw != messageCache[it.messageIdLong]!!.content }
@@ -94,6 +96,7 @@ class MessageLogger(
            .subscribe()
 
         jda.on<MessageDeleteEvent>()
+           .filter { it.isFromGuild && filterId(it.guild, config.guildId) }
            .flatMap {
                val oldMessage = messageCache[it.messageIdLong]
 

@@ -184,8 +184,9 @@ class TwitchApi(
             repeat(data.length()) { i ->
                 val video = data.getObject(i)
                 val type = video.getString("type")
+                val createdAt = OffsetDateTime.parse(video.getString("created_at"))
                 // Stream vods are always type archive (other types are highlight and upload)
-                if (type == "archive") {
+                if (type == "archive" && !stream.startedAt.isAfter(createdAt)) {
                     return@makeRequest buildVideo(video)
                 }
             }

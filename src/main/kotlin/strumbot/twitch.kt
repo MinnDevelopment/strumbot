@@ -20,6 +20,8 @@ import club.minnced.jda.reactor.toMono
 import net.dv8tion.jda.api.utils.data.DataArray
 import net.dv8tion.jda.api.utils.data.DataObject
 import okhttp3.*
+import org.slf4j.Logger
+import org.slf4j.LoggerFactory
 import reactor.core.publisher.Mono
 import reactor.core.scheduler.Scheduler
 import java.io.ByteArrayInputStream
@@ -69,6 +71,10 @@ class TwitchApi(
     private val scheduler: Scheduler,
     private val clientId: String,
     private var accessToken: String) {
+
+    companion object {
+        private val log: Logger = LoggerFactory.getLogger(TwitchApi::class.java)
+    }
 
     private val games = FixedSizeMap<String, Game>(10)
 
@@ -190,6 +196,7 @@ class TwitchApi(
                     return@makeRequest buildVideo(video)
                 }
             }
+            log.warn("Could not find vod for current stream by ${stream.userLogin}. Did you enable archives?")
             return@makeRequest null
         }
     }

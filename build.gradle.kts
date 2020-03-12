@@ -22,8 +22,7 @@ repositories {
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-//    implementation("net.dv8tion:JDA:4.1.1_105")
-    implementation("com.github.dv8fromtheworld:jda:b209c99")
+    implementation("net.dv8tion:JDA:4.1.1_111")
     implementation("club.minnced:jda-reactor:1.0.0")
     implementation("club.minnced:discord-webhooks:0.2.0")
     implementation(kotlin("stdlib-jdk8"))

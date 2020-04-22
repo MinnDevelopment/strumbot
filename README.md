@@ -12,7 +12,7 @@ A Twitch Stream Notification Bot. This will send notifications to a webhook in y
 
 ## Requirements
 
-- JDK 1.8 or better
+- JDK 11 or better
 - Stable Internet
 
 ## Configurations

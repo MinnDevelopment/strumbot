@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("com.github.johnrengelman.shadow") version "5.1.0"
-    id("org.jetbrains.kotlin.jvm") version "1.3.61"
+    id("org.jetbrains.kotlin.jvm") version "1.3.70"
     application
 }
 
@@ -22,7 +22,7 @@ repositories {
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("net.dv8tion:JDA:4.1.1_111")
+    implementation("net.dv8tion:JDA:4.1.1_137")
     implementation("club.minnced:jda-reactor:1.0.0")
     implementation("club.minnced:discord-webhooks:0.2.0")
     implementation(kotlin("stdlib-jdk8"))
@@ -36,7 +36,7 @@ val compileKotlin: KotlinCompile by tasks
 val shadowJar: ShadowJar by tasks
 
 compileKotlin.apply {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
 }
 
 tasks.create<Copy>("install") {

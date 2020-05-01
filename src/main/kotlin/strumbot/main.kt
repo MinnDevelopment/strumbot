@@ -37,6 +37,7 @@ import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
 import net.dv8tion.jda.api.requests.GatewayIntent
 import net.dv8tion.jda.api.requests.restaction.RoleAction
+import net.dv8tion.jda.api.utils.cache.CacheFlag
 import okhttp3.OkHttpClient
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -72,6 +73,8 @@ fun main() {
         .setCallbackPool(pool)
         .setGatewayPool(pool)
         .setRateLimitPool(pool)
+        .disableCache(CacheFlag.channels())
+        .enableCache(CacheFlag.CHANNELS_TEXT)
         .build()
 
     // Cycling streaming status

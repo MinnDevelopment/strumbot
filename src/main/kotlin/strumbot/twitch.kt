@@ -37,39 +37,16 @@ class HttpException(route: String, status: Int, meaning: String)
 
 private val emptyFormBody = RequestBody.create(MediaType.parse("form-data"), "")
 
-fun createTwitchApi(http: OkHttpClient, scheduler: Scheduler, clientId: String, clientSecret: String): Mono<TwitchApi> = Mono.create { sink ->
-    val request = Request.Builder()
-        .url("https://id.twitch.tv/oauth2/token" +
-                "?client_id=${clientId}" +
-                "&client_secret=${clientSecret}" +
-                "&grant_type=client_credentials")
-        .method("POST", emptyFormBody)
-        .build()
-
-    http.newCall(request).enqueue(object : Callback {
-        override fun onFailure(call: Call, e: IOException) {
-            sink.error(e)
-        }
-
-        override fun onResponse(call: Call, response: Response) {
-            if (!response.isSuccessful) {
-                sink.error(HttpException(response))
-                return
-            }
-
-            val json = DataObject.fromJson(response.body()!!.byteStream())
-            val accessToken = json.getString("access_token")
-            sink.success(TwitchApi(
-                http, scheduler,
-                clientId, accessToken))
-        }
-    })
+fun createTwitchApi(http: OkHttpClient, scheduler: Scheduler, clientId: String, clientSecret: String): Mono<TwitchApi> = Mono.defer {
+    val api = TwitchApi(http, scheduler, clientId, clientSecret, "N/A")
+    api.authorize().thenReturn(api)
 }
 
 class TwitchApi(
     private val http: OkHttpClient,
     private val scheduler: Scheduler,
     private val clientId: String,
+    private val clientSecret: String,
     private var accessToken: String) {
 
     companion object {
@@ -79,6 +56,31 @@ class TwitchApi(
     private val warnedMissingVod = mutableSetOf<String>()
     private val games = FixedSizeMap<String, Game>(10)
 
+    internal fun authorize(): Mono<Unit> = Mono.create { sink ->
+        val request = Request.Builder()
+            .url("https://id.twitch.tv/oauth2/token" +
+                    "?client_id=${clientId}" +
+                    "&client_secret=${clientSecret}" +
+                    "&grant_type=client_credentials")
+            .method("POST", emptyFormBody)
+            .build()
+        http.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                sink.error(e)
+            }
+
+            override fun onResponse(call: Call, response: Response) {
+                if (response.isSuccessful) {
+                    val json = DataObject.fromJson(response.body()!!.byteStream())
+                    accessToken = json.getString("access_token")
+                    sink.success()
+                } else {
+                    sink.error(HttpException(response))
+                }
+            }
+        })
+    }
+
     private fun <T> makeRequest(request: Request, handler: (Response) -> T?): Mono<T> = Mono.create<T> { sink ->
         http.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
@@ -87,10 +89,14 @@ class TwitchApi(
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
-                    if (response.isSuccessful) {
-                        sink.success(handler(response))
-                    } else {
-                        sink.error(HttpException(response))
+                    when {
+                        response.code() == 401 -> {
+                            authorize()
+                                .then(makeRequest(request, handler))
+                                .subscribe(sink::success, sink::error)
+                        }
+                        response.isSuccessful -> sink.success(handler(response))
+                        else -> sink.error(HttpException(response))
                     }
                 }
             }

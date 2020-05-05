@@ -71,12 +71,14 @@ class TwitchApi(
             }
 
             override fun onResponse(call: Call, response: Response) {
-                if (response.isSuccessful) {
-                    val json = DataObject.fromJson(response.body()!!.byteStream())
-                    accessToken = json.getString("access_token")
-                    sink.success()
-                } else {
-                    sink.error(HttpException(response))
+                response.use {
+                    if (response.isSuccessful) {
+                        val json = DataObject.fromJson(response.body()!!.byteStream())
+                        accessToken = json.getString("access_token")
+                        sink.success()
+                    } else {
+                        sink.error(HttpException(response))
+                    }
                 }
             }
         })

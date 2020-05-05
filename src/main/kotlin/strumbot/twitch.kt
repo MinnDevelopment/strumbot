@@ -28,6 +28,7 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.time.Duration
 import java.time.OffsetDateTime
 
 class HttpException(route: String, status: Int, meaning: String)
@@ -93,6 +94,16 @@ class TwitchApi(
                         response.code() == 401 -> {
                             authorize()
                                 .then(makeRequest(request, handler))
+                                .subscribe(sink::success, sink::error)
+                        }
+                        response.code() == 429 -> {
+                            log.warn("Hit rate limit, retrying request. Headers:\n{}", response.headers())
+                            val reset = response.header("ratelimit-reset")?.let {
+                                it.toLong() - System.currentTimeMillis()
+                            } ?: 1000
+
+                            Mono.delay(Duration.ofMillis(reset))
+                                .flatMap { makeRequest(request, handler) }
                                 .subscribe(sink::success, sink::error)
                         }
                         response.isSuccessful -> sink.success(handler(response))

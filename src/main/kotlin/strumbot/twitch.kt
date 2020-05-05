@@ -96,7 +96,7 @@ class TwitchApi(
                         response.code() == 401 -> {
                             authorize()
                                 .then(makeRequest(request, handler))
-                                .subscribe(sink::success, sink::error)
+                                .subscribe(sink::success, sink::error, sink::success)
                         }
                         response.code() == 429 -> {
                             log.warn("Hit rate limit, retrying request. Headers:\n{}", response.headers())
@@ -105,8 +105,8 @@ class TwitchApi(
                             } ?: 1000
 
                             Mono.delay(Duration.ofMillis(reset))
-                                .flatMap { makeRequest(request, handler) }
-                                .subscribe(sink::success, sink::error)
+                                .then(makeRequest(request, handler))
+                                .subscribe(sink::success, sink::error, sink::success)
                         }
                         response.isSuccessful -> sink.success(handler(response))
                         else -> sink.error(HttpException(response))

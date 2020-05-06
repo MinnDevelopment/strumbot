@@ -24,7 +24,7 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
 //    implementation("net.dv8tion:JDA:4.1.1_137")
     implementation("com.github.dv8fromtheworld:jda:58c0a67")
-    implementation("club.minnced:jda-reactor:1.0.0")
+    implementation("club.minnced:jda-reactor:1.1.0")
     implementation("club.minnced:discord-webhooks:0.2.0")
     implementation(kotlin("stdlib-jdk8"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.2")

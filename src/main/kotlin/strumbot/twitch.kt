@@ -98,6 +98,9 @@ class TwitchApi(
                                 .then(makeRequest(request, handler))
                                 .subscribe(sink::success, sink::error, sink::success)
                         }
+                        response.code() == 404 -> {
+                            sink.success()
+                        }
                         response.code() == 429 -> {
                             log.warn("Hit rate limit, retrying request. Headers:\n{}", response.headers())
                             val reset = response.header("ratelimit-reset")?.let {

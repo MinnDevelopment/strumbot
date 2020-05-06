@@ -23,6 +23,7 @@ import club.minnced.discord.webhook.send.WebhookEmbed.*
 import club.minnced.discord.webhook.send.WebhookEmbedBuilder
 import club.minnced.discord.webhook.send.WebhookMessageBuilder
 import kotlinx.coroutines.reactive.awaitFirst
+import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactor.mono
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Activity
@@ -42,6 +43,7 @@ import java.time.Duration
 import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.*
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ScheduledExecutorService
 
@@ -170,6 +172,9 @@ class StreamWatcher(
                 val getGame = twitch.getGame(stream)
                 val getVod = twitch.getVideoByStream(stream).map(Video::id).switchIfEmpty("".toMono())
                 val getThumbnail = twitch.getThumbnail(stream)
+                    .map { Optional.of(it) }
+                    .switchIfEmpty(Optional.empty<InputStream>().toMono())
+
                 Mono.zip(getStream, getGame, getVod, getThumbnail)
                     .flatMap(this::handleGoLive)
             } else {
@@ -209,7 +214,7 @@ class StreamWatcher(
                                   .fold(StringBuilder()) { a, b -> a.append('\n').append(b) }
 
             val video = twitch.getVideoById(videoId).awaitFirst()
-            val thumbnail = twitch.getThumbnail(video).awaitFirst()
+            val thumbnail = twitch.getThumbnail(video).awaitFirstOrNull()
             val videoUrl = firstSegment.toVideoUrl()
             val embed = makeEmbedBase(video.title, videoUrl)
             appendIndex(index, embed)
@@ -220,7 +225,10 @@ class StreamWatcher(
                     .setContent("$mention VOD [$duration]")
                     .setUsername(HOOK_NAME)
                     .addEmbeds(embed.build())
-                    .addFile("thumbnail.jpg", thumbnail)
+                    .apply {
+                        if (thumbnail != null)
+                            addFile("thumbnail.jpg", thumbnail)
+                    }
                     .build()
 
                 webhook.fireEvent("vod") { send(message) }
@@ -228,14 +236,14 @@ class StreamWatcher(
         }
     }
 
-    private fun handleGoLive(tuple: Tuple4<Stream, Game, String, InputStream>): Mono<ReadonlyMessage> {
+    private fun handleGoLive(tuple: Tuple4<Stream, Game, String, Optional<InputStream>>): Mono<ReadonlyMessage> {
         val (stream, game, videoId, thumbnail) = tuple
         log.info("Stream from $userLogin started with game ${game.name} (${game.gameId})")
         updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
         streamStarted = stream.startedAt.toEpochSecond()
         currentElement = StreamElement(game, 0, videoId)
         return withPing("live") { mention ->
-            val embed = makeEmbed(stream, game, thumbnail, userLogin)
+            val embed = makeEmbed(stream, game, thumbnail.orElse(null), userLogin)
                 .setContent("$mention $userLogin is live with **${game.name}**!")
                 .setUsername(HOOK_NAME)
                 .build()
@@ -251,7 +259,7 @@ class StreamWatcher(
             updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
             val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
             currentElement = StreamElement(game, timestamp, videoId)
-            val thumbnail = twitch.getThumbnail(stream).awaitFirst()
+            val thumbnail = twitch.getThumbnail(stream).awaitFirstOrNull()
 
             withPing("update") { mention ->
                 val embed = makeEmbed(stream, game, thumbnail, userLogin, currentElement)
@@ -327,7 +335,7 @@ private fun makeEmbedBase(title: String, url: String): WebhookEmbedBuilder {
 private fun makeEmbed(
     stream: Stream,
     game: Game,
-    thumbnail: InputStream,
+    thumbnail: InputStream?,
     twitchName: String,
     currentSegment: StreamElement? = null
 ): WebhookMessageBuilder {
@@ -348,7 +356,9 @@ private fun makeEmbed(
         builder.build()
     }
 
-    return WebhookMessageBuilder()
-        .addFile("thumbnail.jpg", thumbnail)
-        .addEmbeds(embed)
+    return WebhookMessageBuilder().apply {
+        if (thumbnail != null)
+            addFile("thumbnail.jpg", thumbnail)
+        addEmbeds(embed)
+    }
 }

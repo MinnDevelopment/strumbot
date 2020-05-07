@@ -17,10 +17,7 @@
 @file:JvmName("Main")
 package strumbot
 
-import club.minnced.jda.reactor.asMono
-import club.minnced.jda.reactor.on
-import club.minnced.jda.reactor.reactive
-import club.minnced.jda.reactor.then
+import club.minnced.jda.reactor.*
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
 import net.dv8tion.jda.api.Permission
@@ -71,8 +68,10 @@ fun main() {
     val twitch = createTwitchApi(okhttp, poolScheduler, configuration.twitchClientId, configuration.twitchClientSecret).block()!!
 
     log.info("Initializing discord connection")
+    val manager = createManager { this.scheduler = poolScheduler }
+    setupRankCreator(manager, configuration)
     val jda = JDABuilder.createLight(configuration.token, GatewayIntent.GUILD_MESSAGES)
-        .reactive { this.scheduler = poolScheduler }
+        .setEventManager(manager)
         .setHttpClient(okhttp)
         .setCallbackPool(pool)
         .setGatewayPool(pool)
@@ -83,7 +82,6 @@ fun main() {
     val activityService = ActivityService(jda, poolScheduler)
     activityService.start()
 
-    setupRankCreator(jda, configuration)
     setupRankListener(jda, configuration)
     // Optional message logging
     configuration.messageLogs?.let { messageWebhook ->
@@ -107,7 +105,7 @@ fun main() {
     System.gc()
 }
 
-private fun setupRankCreator(jda: JDA, configuration: Configuration) {
+private fun setupRankCreator(jda: ReactiveEventManager, configuration: Configuration) {
     val listener = Flux.merge(
         jda.on<GuildReadyEvent>().map(GuildReadyEvent::getGuild),
         jda.on<GuildJoinEvent>().map(GuildJoinEvent::getGuild)

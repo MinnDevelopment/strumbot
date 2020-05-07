@@ -357,9 +357,9 @@ private fun makeEmbed(
     }
 
     return WebhookMessageBuilder().apply {
+        setAllowedMentions(AllowedMentions().withParseRoles(true))
         if (thumbnail != null)
             addFile("thumbnail.jpg", thumbnail)
         addEmbeds(embed)
-        setAllowedMentions(AllowedMentions().withParseRoles(true))
     }
 }

@@ -81,7 +81,8 @@ fun startTwitchService(
             })
         }
         .doOnError(::suppressExpected) { log.error("Error in twitch stream service", it) }
-        .retry { it !is Error }
+        .retry { it !is Error && it !is HttpException }
+        .retryBackoff(2, Duration.ofSeconds(10))
         .doFinally { log.warn("Twitch service terminated unexpectedly with signal {}", it) }
         .subscribe()
 }

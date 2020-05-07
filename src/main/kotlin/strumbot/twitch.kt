@@ -90,7 +90,7 @@ class TwitchApi(
         })
     }
 
-    private fun <T> makeRequest(request: Request, handler: (Response) -> T?): Mono<T> = Mono.create<T> { sink ->
+    private fun <T> makeRequest(request: Request, failed: Boolean = false, handler: (Response) -> T?): Mono<T> = Mono.create<T> { sink ->
         http.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 sink.error(e)
@@ -99,9 +99,13 @@ class TwitchApi(
             override fun onResponse(call: Call, response: Response) {
                 response.use {
                     when {
+                        failed && !response.isSuccessful -> {
+                            sink.error(HttpException(response))
+                        }
                         response.code() == 401 -> {
+                            log.warn("Authorization expired, refreshing token...")
                             authorize()
-                                .then(makeRequest(request, handler))
+                                .then(makeRequest(request, true, handler))
                                 .subscribe(sink::success, sink::error, sink::success)
                         }
                         response.code() == 404 -> {
@@ -114,7 +118,7 @@ class TwitchApi(
                             } ?: 1000
 
                             Mono.delay(Duration.ofMillis(reset))
-                                .then(makeRequest(request, handler))
+                                .then(makeRequest(request, true, handler))
                                 .subscribe(sink::success, sink::error, sink::success)
                         }
                         response.isSuccessful -> sink.success(handler(response))

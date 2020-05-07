@@ -89,7 +89,6 @@ fun main() {
     }
 
     jda.awaitReady()
-    Thread.sleep(1000)
 
     val watchedStreams = mutableMapOf<String, StreamWatcher>()
     for (userLogin in configuration.twitchUser) {

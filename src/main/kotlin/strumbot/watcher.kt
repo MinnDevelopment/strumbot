@@ -19,6 +19,7 @@ package strumbot
 import club.minnced.discord.webhook.WebhookClient
 import club.minnced.discord.webhook.WebhookClientBuilder
 import club.minnced.discord.webhook.receive.ReadonlyMessage
+import club.minnced.discord.webhook.send.AllowedMentions
 import club.minnced.discord.webhook.send.WebhookEmbed.*
 import club.minnced.discord.webhook.send.WebhookEmbedBuilder
 import club.minnced.discord.webhook.send.WebhookMessageBuilder
@@ -359,5 +360,6 @@ private fun makeEmbed(
         if (thumbnail != null)
             addFile("thumbnail.jpg", thumbnail)
         addEmbeds(embed)
+        setAllowedMentions(AllowedMentions().withParseRoles(true))
     }
 }

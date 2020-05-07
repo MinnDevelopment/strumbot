@@ -43,6 +43,10 @@ fun createTwitchApi(http: OkHttpClient, scheduler: Scheduler, clientId: String, 
     api.authorize().thenReturn(api)
 }
 
+class NotAuthorizedError(
+    response: Response
+): Error("Authorization failed. Code: ${response.code()} Body: ${response.body()!!.string()}")
+
 class TwitchApi(
     private val http: OkHttpClient,
     private val scheduler: Scheduler,
@@ -72,12 +76,14 @@ class TwitchApi(
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
-                    if (response.isSuccessful) {
-                        val json = DataObject.fromJson(response.body()!!.byteStream())
-                        accessToken = json.getString("access_token")
-                        sink.success()
-                    } else {
-                        sink.error(HttpException(response))
+                    when {
+                        response.isSuccessful -> {
+                            val json = DataObject.fromJson(response.body()!!.byteStream())
+                            accessToken = json.getString("access_token")
+                            sink.success()
+                        }
+                        response.code() < 500 -> sink.error(NotAuthorizedError(response))
+                        else -> sink.error(HttpException(response))
                     }
                 }
             }

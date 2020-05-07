@@ -63,7 +63,7 @@ fun startTwitchService(
     twitch: TwitchApi,
     watchedStreams: Map<String, StreamWatcher>,
     poolScheduler: Scheduler
-) {
+): Flux<*> {
     log.info("Listening for stream(s) from {}",
         if (watchedStreams.size == 1)
             watchedStreams.keys.first()
@@ -71,7 +71,7 @@ fun startTwitchService(
             watchedStreams.keys.toString()
     )
 
-    Flux.interval(Duration.ZERO, Duration.ofSeconds(10), poolScheduler)
+    return Flux.interval(Duration.ZERO, Duration.ofSeconds(10), poolScheduler)
         .flatMap { twitch.getStreamByLogin(watchedStreams.keys) }
         .flatMapSequential { streams ->
             Flux.merge(watchedStreams.map { entry ->
@@ -83,8 +83,6 @@ fun startTwitchService(
         .doOnError(::suppressExpected) { log.error("Error in twitch stream service", it) }
         .retry { it !is Error && it !is HttpException }
         .retryBackoff(2, Duration.ofSeconds(10))
-        .doFinally { log.warn("Twitch service terminated unexpectedly with signal {}", it) }
-        .subscribe()
 }
 
 data class Timestamps(val display: String, val twitchFormat: String) {

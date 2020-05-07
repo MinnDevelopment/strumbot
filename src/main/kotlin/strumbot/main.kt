@@ -37,6 +37,7 @@ import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
 import net.dv8tion.jda.api.requests.GatewayIntent
 import net.dv8tion.jda.api.requests.restaction.RoleAction
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -47,6 +48,7 @@ import reactor.core.scheduler.Schedulers
 import java.lang.Integer.max
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 private val log = LoggerFactory.getLogger("Main") as Logger
@@ -61,7 +63,10 @@ private val poolScheduler = Schedulers.fromExecutor(pool)
 
 fun main() {
     val configuration = loadConfiguration("config.json")
-    val okhttp = OkHttpClient()
+    val okhttp = OkHttpClient.Builder()
+        .connectionPool(ConnectionPool(2, 20, TimeUnit.SECONDS))
+        .build()
+
     log.info("Initializing twitch api")
     val twitch = createTwitchApi(okhttp, poolScheduler, configuration.twitchClientId, configuration.twitchClientSecret).block()!!
 
@@ -93,6 +98,11 @@ fun main() {
     }
 
     startTwitchService(twitch, watchedStreams, poolScheduler)
+        .doFinally {
+            log.warn("Twitch service terminated unexpectedly with signal {}", it)
+            jda.shutdownNow()
+        }.subscribe()
+
     System.gc()
 }
 

@@ -133,7 +133,7 @@ class TwitchApi(
         return Request.Builder()
             .url(url)
             .addHeader("Client-ID", clientId)
-            .addHeader("Authorization", "OAuth $accessToken")
+            .addHeader("Authorization", "Bearer $accessToken")
     }
 
     fun getStreamByLogin(login: Collection<String>): Mono<List<Stream>> = Mono.defer {

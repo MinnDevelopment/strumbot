@@ -55,13 +55,6 @@ fun JDA.getRoleByType(configuration: Configuration, type: String): String {
     return rankByType[type] ?: "0"
 }
 
-suspend fun RestAction<*>.awaitUnit() = suspendCoroutine<Unit> { cont ->
-    queue(
-        { cont.resume(Unit) },
-        { cont.resumeWithException(it) }
-    )
-}
-
-suspend fun <T> RestAction<T>.awaitSingle() = suspendCoroutine<T> { cont ->
+suspend fun <T> RestAction<T>.await() = suspendCoroutine<T> { cont ->
     queue(cont::resume, cont::resumeWithException)
 }

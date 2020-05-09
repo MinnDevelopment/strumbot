@@ -109,6 +109,7 @@ class TwitchApi(
                                 .subscribe(sink::success, sink::error, sink::success)
                         }
                         response.code() == 404 -> {
+                            log.warn("Received 404 response for request to ${request.url()}")
                             sink.success()
                         }
                         response.code() == 429 -> {

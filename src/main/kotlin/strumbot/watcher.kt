@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory
 import reactor.core.Exceptions
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
+import reactor.core.publisher.toFlux
 import reactor.core.publisher.toMono
 import reactor.core.scheduler.Scheduler
 import reactor.util.function.Tuple4
@@ -202,7 +203,6 @@ class StreamWatcher(
         log.info("Stream from $userLogin went offline!")
         updateActivity(null)
         timestamps.add(currentElement!!)
-        val videoId = currentElement!!.videoId
         currentElement = null
         val timestamps = this.timestamps.toList()
         val firstSegment = timestamps.first()
@@ -213,10 +213,17 @@ class StreamWatcher(
                                   .map { it.toVodLink() }
                                   .fold(StringBuilder()) { a, b -> a.append('\n').append(b) }
 
-            val video = twitch.getVideoById(videoId).awaitFirst()
-            val thumbnail = twitch.getThumbnail(video).awaitFirstOrNull()
+            // Find most recent video available, the streamer might delete a vod during the stream
+            val video = timestamps
+                .asReversed()
+                .toFlux()
+                .map { it.videoId }
+                .flatMap { twitch.getVideoById(it) }
+                .awaitFirstOrNull()
+
+            val thumbnail = video?.let { twitch.getThumbnail(it).awaitFirstOrNull() }
             val videoUrl = firstSegment.toVideoUrl()
-            val embed = makeEmbedBase(video.title, videoUrl)
+            val embed = makeEmbedBase(video?.title ?: "<Video Removed>", videoUrl)
             appendIndex(index, embed)
 
             withPing("vod") { mention ->

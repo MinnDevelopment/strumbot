@@ -23,6 +23,8 @@
         </encoder>
     </appender>
 
+<!--    <logger name="strumbot.TwitchApi" level="trace" />-->
+
     <root level="info">
         <appender-ref ref="STDOUT" />
     </root>

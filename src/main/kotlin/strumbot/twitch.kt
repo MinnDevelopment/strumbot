@@ -91,6 +91,7 @@ class TwitchApi(
     }
 
     private fun <T> makeRequest(request: Request, failed: Boolean = false, handler: (Response) -> T?): Mono<T> = Mono.create<T> { sink ->
+        log.trace("Making request to {}", request.url())
         http.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 sink.error(e)
@@ -98,6 +99,7 @@ class TwitchApi(
 
             override fun onResponse(call: Call, response: Response) {
                 response.use {
+                    log.trace("Got response {} for url {}", response.code(), request.url())
                     when {
                         failed && !response.isSuccessful -> {
                             sink.error(HttpException(response))
@@ -166,6 +168,9 @@ class TwitchApi(
     }
 
     fun getGame(stream: Stream): Mono<Game> = Mono.defer {
+        if (stream.gameId.isEmpty()) {
+            return@defer EMPTY_GAME.toMono()
+        }
         if (stream.gameId in games) {
             return@defer games[stream.gameId].toMono()
         }
@@ -175,7 +180,7 @@ class TwitchApi(
         makeRequest(request) { response ->
             val data = body(response)
             if (data.isEmpty) {
-                null
+                EMPTY_GAME
             } else {
                 val game = data.getObject(0)
                 games.computeIfAbsent(stream.gameId) {
@@ -292,3 +297,5 @@ data class Video(
     val title: String,
     val thumbnail: String)
 data class Game(val gameId: String, val name: String)
+
+val EMPTY_GAME = Game("", "No Category")

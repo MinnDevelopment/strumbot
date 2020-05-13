@@ -23,7 +23,6 @@ import club.minnced.discord.webhook.send.AllowedMentions
 import club.minnced.discord.webhook.send.WebhookEmbed.*
 import club.minnced.discord.webhook.send.WebhookEmbedBuilder
 import club.minnced.discord.webhook.send.WebhookMessageBuilder
-import kotlinx.coroutines.reactive.awaitFirst
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactor.mono
 import net.dv8tion.jda.api.JDA
@@ -239,7 +238,7 @@ class StreamWatcher(
                     .build()
 
                 webhook.fireEvent("vod") { send(message) }
-            }.awaitFirst()
+            }.awaitFirstOrNull()
         }
     }
 
@@ -261,7 +260,7 @@ class StreamWatcher(
     private fun handleUpdate(stream: Stream, videoId: String): Mono<ReadonlyMessage> {
         timestamps.add(currentElement!!)
         return mono {
-            val game = twitch.getGame(stream).awaitFirst()
+            val game = twitch.getGame(stream).awaitFirstOrNull() ?: return@mono null
             log.info("Stream from $userLogin changed game ${currentElement?.game?.name} -> ${game.name}")
             updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
             val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
@@ -274,7 +273,7 @@ class StreamWatcher(
                     .setUsername(HOOK_NAME)
                     .build()
                 webhook.fireEvent("update") { send(embed) }
-            }.awaitFirst()
+            }.awaitFirstOrNull()
         }
     }
 

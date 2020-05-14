@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("com.github.johnrengelman.shadow") version "5.1.0"
-    id("org.jetbrains.kotlin.jvm") version "1.3.61"
+    id("org.jetbrains.kotlin.jvm") version "1.3.70"
     application
 }
 
@@ -12,19 +12,22 @@ application {
 }
 
 group = "dev.minn"
-version = "0.1.6"
+version = "0.1.7"
 
 repositories {
     jcenter()
     maven("https://oss.jfrog.org/artifactory/libs-release")
+    maven("https://jitpack.io")
 }
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("net.dv8tion:JDA:4.1.0_97")
-    implementation("club.minnced:jda-reactor:1.0.0")
-    implementation("club.minnced:discord-webhooks:0.2.0")
+    implementation("net.dv8tion:JDA:4.1.1_150")
+    implementation("club.minnced:jda-reactor:1.1.0")
+    implementation("club.minnced:discord-webhooks:0.3.1")
     implementation(kotlin("stdlib-jdk8"))
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.3.2")
 }
 
 val clean by tasks
@@ -33,7 +36,7 @@ val compileKotlin: KotlinCompile by tasks
 val shadowJar: ShadowJar by tasks
 
 compileKotlin.apply {
-    kotlinOptions.jvmTarget = "1.8"
+    kotlinOptions.jvmTarget = "11"
 }
 
 tasks.create<Copy>("install") {

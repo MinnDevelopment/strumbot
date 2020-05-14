@@ -17,10 +17,7 @@
 @file:JvmName("Main")
 package strumbot
 
-import club.minnced.jda.reactor.asMono
-import club.minnced.jda.reactor.createManager
-import club.minnced.jda.reactor.on
-import club.minnced.jda.reactor.then
+import club.minnced.jda.reactor.*
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
 import net.dv8tion.jda.api.Permission
@@ -35,8 +32,9 @@ import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent
 import net.dv8tion.jda.api.exceptions.HierarchyException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
+import net.dv8tion.jda.api.requests.GatewayIntent
 import net.dv8tion.jda.api.requests.restaction.RoleAction
-import net.dv8tion.jda.api.utils.cache.CacheFlag
+import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -44,13 +42,17 @@ import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.core.publisher.toFlux
 import reactor.core.scheduler.Schedulers
-import java.util.EnumSet.noneOf
+import java.lang.Integer.max
 import java.util.concurrent.Executors
+import java.util.concurrent.ForkJoinPool
+import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
 
 private val log = LoggerFactory.getLogger("Main") as Logger
 
-private val pool = Executors.newScheduledThreadPool(2) {
+fun getThreadCount(): Int = max(2, ForkJoinPool.getCommonPoolParallelism())
+
+private val pool = Executors.newScheduledThreadPool(getThreadCount()) {
     thread(start=false, name="Worker-Thread", isDaemon=true, block=it::run)
 }
 
@@ -58,38 +60,51 @@ private val poolScheduler = Schedulers.fromExecutor(pool)
 
 fun main() {
     val configuration = loadConfiguration("config.json")
-    val okhttp = OkHttpClient()
-    val twitch = TwitchApi(
-        okhttp, poolScheduler,
-        configuration.twitchClientId, configuration.twitchClientSecret
-    )
+    val okhttp = OkHttpClient.Builder()
+        .connectionPool(ConnectionPool(2, 20, TimeUnit.SECONDS))
+        .build()
 
-    val manager = createManager {
-        this.scheduler = poolScheduler
-    }
+    log.info("Initializing twitch api")
+    val twitch = createTwitchApi(okhttp, poolScheduler, configuration.twitchClientId, configuration.twitchClientSecret).block()!!
 
-    val jda = JDABuilder(configuration.token)
+    log.info("Initializing discord connection")
+    val manager = createManager { this.scheduler = poolScheduler }
+    setupRankCreator(manager, configuration)
+    val jda = JDABuilder.createLight(configuration.token, GatewayIntent.GUILD_MESSAGES)
         .setEventManager(manager)
         .setHttpClient(okhttp)
-        .setEnabledCacheFlags(noneOf(CacheFlag::class.java))
-        .setGuildSubscriptionsEnabled(false)
         .setCallbackPool(pool)
         .setGatewayPool(pool)
         .setRateLimitPool(pool)
         .build()
 
-    setupRankCreator(jda, configuration)
+    // Cycling streaming status
+    val activityService = ActivityService(jda, poolScheduler)
+    activityService.start()
+
     setupRankListener(jda, configuration)
     // Optional message logging
     configuration.messageLogs?.let { messageWebhook ->
-        MessageLogger(messageWebhook, pool, jda)
+        MessageLogger(messageWebhook, pool, jda, configuration)
     }
 
     jda.awaitReady()
-    StreamWatcher(twitch, jda, configuration).run(pool, poolScheduler)
+
+    val watchedStreams = mutableMapOf<String, StreamWatcher>()
+    for (userLogin in configuration.twitchUser) {
+        watchedStreams[userLogin] = StreamWatcher(twitch, jda, configuration, userLogin, pool, activityService)
+    }
+
+    startTwitchService(twitch, watchedStreams, poolScheduler)
+        .doFinally {
+            log.warn("Twitch service terminated unexpectedly with signal {}", it)
+            jda.shutdownNow()
+        }.subscribe()
+
+    System.gc()
 }
 
-private fun setupRankCreator(jda: JDA, configuration: Configuration) {
+private fun setupRankCreator(jda: ReactiveEventManager, configuration: Configuration) {
     val listener = Flux.merge(
         jda.on<GuildReadyEvent>().map(GuildReadyEvent::getGuild),
         jda.on<GuildJoinEvent>().map(GuildJoinEvent::getGuild)
@@ -97,6 +112,7 @@ private fun setupRankCreator(jda: JDA, configuration: Configuration) {
 
     val ranks = configuration.ranks.values
     listener
+        .filter { filterId(it, configuration.guildId) }
         .flatMap { guild ->
             ranks.toFlux()
                  .filter { guild.getRolesByName(it, true).isEmpty() }
@@ -112,6 +128,7 @@ private fun setupRankListener(jda: JDA, configuration: Configuration) {
     val messages = FixedSizeMap<Long, MessagePath>(10)
 
     jda.on<GuildMessageReceivedEvent>()
+        .filter { filterId(it.guild, configuration.guildId) }
         .map { it.message }
         .filter { it.member != null }
         .filter { it.contentRaw.startsWith("?rank ") }

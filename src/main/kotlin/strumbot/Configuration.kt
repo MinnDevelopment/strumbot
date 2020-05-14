@@ -17,6 +17,8 @@
 package strumbot
 
 import net.dv8tion.jda.api.utils.data.DataObject
+import net.dv8tion.jda.api.utils.data.DataType
+import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileNotFoundException
 
@@ -26,29 +28,40 @@ data class Configuration(
     val twitchClientSecret: String,
     val streamNotifications: String,
     val messageLogs: String?,
+    val guildId: Long,
     val ranks: Map<String, String>,
     val events: Set<String>,
-    val twitchUser: String
+    val twitchUser: Set<String>
 )
 
+private val log = LoggerFactory.getLogger(Configuration::class.java)
 
 fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.json"): Configuration {
+    var file: File
     val json = try {
-        DataObject.fromJson(File(path).reader())
+        file = File(path)
+        DataObject.fromJson(file.reader())
     } catch (ex: FileNotFoundException) {
-        DataObject.fromJson(File(fallback).reader())
+        file = File(fallback)
+        DataObject.fromJson(file.reader())
     }
+
+    log.info("Loaded config from ${file.canonicalPath}")
 
     val discord = json.getObject("discord")
     val twitch = json.getObject("twitch")
-    val roles = discord.getObject("role_name").let {
-        val map = mutableMapOf<String, String>()
-        map["live"] = it.getString("live", "")
-        map["update"] = it.getString("update", "")
-        map["vod"] = it.getString("vod", "")
-        map
+    val roles = discord.getObject("role_name").run {
+        mapOf(
+            "live" to getString("live", ""),
+            "update" to getString("update", ""),
+            "vod" to getString("vod", "")
+        )
     }
-    val events = discord.getArray("enabled_events").toList().map { it.toString() }.toSet()
+    val events = discord.getArray("enabled_events").asSequence().map(Any::toString).toSet()
+    val userLogin = if (twitch.isType("user_login", DataType.ARRAY))
+                        twitch.getArray("user_login").map(Any::toString).toSet()
+                    else
+                        setOf(twitch.getString("user_login"))
 
     return Configuration(
         discord.getString("token"),
@@ -56,8 +69,7 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
         twitch.getString("client_secret"),
         discord.getString("stream_notifications"),
         discord.getString("message_logs", null),
-        roles,
-        events,
-        twitch.getString("user_login")
+        discord.getLong("server_id", 0L),
+        roles, events, userLogin
     )
 }

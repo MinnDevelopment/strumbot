@@ -12,7 +12,7 @@ A Twitch Stream Notification Bot. This will send notifications to a webhook in y
 
 ## Requirements
 
-- JDK 1.8 or better
+- JDK 11 or better
 - Stable Internet
 
 ## Configurations
@@ -52,7 +52,7 @@ This configuration section contains required information to track the stream sta
 If you don't know how to make a twitch application and access the client_id: [How to make a twitch app](https://github.com/MinnDevelopment/strumbot/blob/master/guides/HOW_TO_CREATE_A_TWITCH_APP.md)
 
 - `client_id` The twitch application's client_id
-- `client_secret` The twitch application's client_secret (currently unused)
+- `client_secret` The twitch application's client_secret
 - `user_login` The username of the tracked streamer
 
 ### Example
@@ -73,7 +73,7 @@ If you don't know how to make a twitch application and access the client_id: [Ho
   "twitch": {
     "client_id": "*******",
     "client_secret": "*******",
-    "user_login": "Elajjaz"
+    "user_login": ["Elajjaz", "Distortion2"]
   }
 }
 ```
@@ -93,13 +93,11 @@ The image is hosted at [docker hub](https://hub.docker.com/repository/docker/min
 1. Create and start a container with this command:
     ```sh
     docker run -d \
-      -v $(pwd)/config.json:/etc/strumbot/config.json \
+      -v ./config.json:/etc/strumbot/config.json \
       --name strumbot \
       --restart unless-stopped \
       minnced/strumbot:%VERSION%
    ```
-
-> For windows users: Replace `$(pwd)` with `%cd%` and `\` with `^`!
 
 ### Script
 

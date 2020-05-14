@@ -93,13 +93,11 @@ The image is hosted at [docker hub](https://hub.docker.com/repository/docker/min
 1. Create and start a container with this command:
     ```sh
     docker run -d \
-      -v $(pwd)/config.json:/etc/strumbot/config.json \
+      -v ./config.json:/etc/strumbot/config.json \
       --name strumbot \
       --restart unless-stopped \
       minnced/strumbot:%VERSION%
    ```
-
-> For windows users: Replace `$(pwd)` with `%cd%` and `\` with `^`!
 
 ### Script
 

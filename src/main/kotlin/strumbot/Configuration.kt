@@ -21,6 +21,8 @@ import net.dv8tion.jda.api.utils.data.DataType
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileNotFoundException
+import kotlin.math.max
+import kotlin.math.min
 
 data class Configuration(
     val token: String,
@@ -29,6 +31,7 @@ data class Configuration(
     val streamNotifications: String,
     val messageLogs: String?,
     val guildId: Long,
+    val topClips: Int,
     val ranks: Map<String, String>,
     val events: Set<String>,
     val twitchUser: Set<String>
@@ -70,6 +73,7 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
         discord.getString("stream_notifications"),
         discord.getString("message_logs", null),
         discord.getLong("server_id", 0L),
+        min(5, max(0, twitch.getInt("top_clips", 0))),
         roles, events, userLogin
     )
 }

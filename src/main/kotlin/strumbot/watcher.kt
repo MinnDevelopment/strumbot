@@ -123,6 +123,7 @@ class StreamWatcher(
     private var offlineTimestamp = 0L
     private var streamStarted = 0L
     private var currentActivity: Activity? = null
+    private var userId: String = ""
     private val timestamps: MutableList<StreamElement> = mutableListOf()
     private val webhook: WebhookClient by lazy {
         WebhookClientBuilder(configuration.streamNotifications)
@@ -224,6 +225,16 @@ class StreamWatcher(
             val videoUrl = firstSegment.toVideoUrl()
             val embed = makeEmbedBase(video?.title ?: "<Video Removed>", videoUrl)
             appendIndex(index, embed)
+            if (configuration.topClips > 0) {
+                val clips = twitch.getTopClips(userId, streamStarted, configuration.topClips).awaitFirstOrNull() ?: emptyList()
+                if (clips.isNotEmpty()) {
+                    embed.addField(EmbedField(false, "Top Clips",
+                        clips.asSequence()
+                            .map { "${it.title} \u2022 ${it.views} views [(watch)](${it.url})" }
+                            .joinToString("\n")
+                    ))
+                }
+            }
 
             withPing("vod") { mention ->
                 val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
@@ -248,6 +259,7 @@ class StreamWatcher(
         updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
         streamStarted = stream.startedAt.toEpochSecond()
         currentElement = StreamElement(game, 0, videoId)
+        userId = stream.userId
         return withPing("live") { mention ->
             val embed = makeEmbed(stream, game, thumbnail.orElse(null), userLogin)
                 .setContent("$mention $userLogin is live with **${game.name}**!")
@@ -259,6 +271,7 @@ class StreamWatcher(
 
     private fun handleUpdate(stream: Stream, videoId: String): Mono<ReadonlyMessage> {
         timestamps.add(currentElement!!)
+        userId = stream.userId
         return mono {
             val game = twitch.getGame(stream).awaitFirstOrNull() ?: return@mono null
             log.info("Stream from $userLogin changed game ${currentElement?.game?.name} -> ${game.name}")

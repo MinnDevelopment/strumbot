@@ -29,6 +29,7 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.time.Duration
+import java.time.Instant
 import java.time.OffsetDateTime
 
 class HttpException(route: String, status: Int, meaning: String)
@@ -241,6 +242,26 @@ class TwitchApi(
         }
     }
 
+    fun getTopClips(userId: String, startedAt: Long, num: Int = 5): Mono<List<Video>> {
+        val request = newRequest(
+            "https://api.twitch.tv/helix/clips" +
+                "?broadcaster_id=$userId" +
+                "&first=$num" +
+                "&started_at=${Instant.ofEpochSecond(startedAt)}"
+        ).build()
+
+        return makeRequest(request) { response ->
+            val data = body(response)
+            if (data.length() == 0)
+                emptyList()
+            else {
+                List(data.length()) {
+                    buildVideo(data.getObject(it))
+                }
+            }
+        }
+    }
+
     fun getThumbnail(stream: Stream, width: Int = 1920, height: Int = 1080): Mono<InputStream> = getThumbnail(stream.thumbnail, width, height)
     fun getThumbnail(video: Video, width: Int = 1920, height: Int = 1080): Mono<InputStream> = getThumbnail(video.thumbnail, width, height)
     fun getThumbnail(url: String, width: Int, height: Int): Mono<InputStream> = Mono.defer {
@@ -278,7 +299,8 @@ class TwitchApi(
         val url = video.getString("url")
         val title = video.getString("title")
         val thumbnail = video.getString("thumbnail_url")
-        return Video(id, url, title, thumbnail)
+        val views = video.getInt("view_count", 0)
+        return Video(id, url, title, thumbnail, views)
     }
 }
 
@@ -295,7 +317,8 @@ data class Video(
     val id: String,
     val url: String,
     val title: String,
-    val thumbnail: String)
+    val thumbnail: String,
+    val views: Int)
 data class Game(val gameId: String, val name: String)
 
 val EMPTY_GAME = Game("", "No Category")

@@ -230,7 +230,11 @@ class StreamWatcher(
                 if (clips.isNotEmpty()) {
                     embed.addField(EmbedField(false, "Top Clips",
                         clips.asSequence()
-                            .map { "${it.title} \u2022 ${it.views} views [(watch)](${it.url})" }
+                            .withIndex()
+                            .map { (i, it) ->
+                                // <index> <Title> - <ViewCount> views
+                                "`${i + 1}.` [${limit(it.title, 25)} \uD83E\uDC55](${it.url}) \u2022 **${it.views}**\u00A0views"
+                            }
                             .joinToString("\n")
                     ))
                 }
@@ -381,4 +385,10 @@ private fun makeEmbed(
             addFile("thumbnail.jpg", thumbnail)
         addEmbeds(embed)
     }
+}
+
+private fun limit(input: String, limit: Int): String {
+    if (input.length <= limit)
+        return input
+    return input.substring(0, limit) + "\u2026"
 }

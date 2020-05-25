@@ -51,6 +51,7 @@ This configuration section contains required information to track the stream sta
 
 If you don't know how to make a twitch application and access the client_id: [How to make a twitch app](https://github.com/MinnDevelopment/strumbot/blob/master/guides/HOW_TO_CREATE_A_TWITCH_APP.md)
 
+- `top_clips` The maximum number of top clips to show in the vod event (0 <= x <= 5)
 - `client_id` The twitch application's client_id
 - `client_secret` The twitch application's client_secret
 - `user_login` The username of the tracked streamer
@@ -71,6 +72,7 @@ If you don't know how to make a twitch application and access the client_id: [Ho
     "enabled_events": ["live", "update", "vod"]
   },
   "twitch": {
+    "top_clips": 5,
     "client_id": "*******",
     "client_secret": "*******",
     "user_login": ["Elajjaz", "Distortion2"]
@@ -80,7 +82,7 @@ If you don't know how to make a twitch application and access the client_id: [Ho
 
 ## Setup
 
-Currently I only provide 2 setups. Either [docker](https://hub.docker.com) or through a script.
+Currently, I only provide 2 setups. Either [docker](https://hub.docker.com) or through a script.
 I'm open for pull requests that introduce more or better setups.
 
 ### Docker

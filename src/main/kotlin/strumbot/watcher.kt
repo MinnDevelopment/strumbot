@@ -123,6 +123,7 @@ class StreamWatcher(
     private var offlineTimestamp = 0L
     private var streamStarted = 0L
     private var currentActivity: Activity? = null
+    private var userId: String = ""
     private val timestamps: MutableList<StreamElement> = mutableListOf()
     private val webhook: WebhookClient by lazy {
         WebhookClientBuilder(configuration.streamNotifications)
@@ -224,6 +225,20 @@ class StreamWatcher(
             val videoUrl = firstSegment.toVideoUrl()
             val embed = makeEmbedBase(video?.title ?: "<Video Removed>", videoUrl)
             appendIndex(index, embed)
+            if (configuration.topClips > 0) {
+                val clips = twitch.getTopClips(userId, streamStarted, configuration.topClips).awaitFirstOrNull() ?: emptyList()
+                if (clips.isNotEmpty()) {
+                    embed.addField(EmbedField(false, "Top Clips",
+                        clips.asSequence()
+                            .withIndex()
+                            .map { (i, it) ->
+                                // <index> <Title> - <ViewCount> views
+                                "`${i + 1}.` [${limit(it.title, 25)} \uD83E\uDC55](${it.url}) \u2022 **${it.views}**\u00A0views"
+                            }
+                            .joinToString("\n")
+                    ))
+                }
+            }
 
             withPing("vod") { mention ->
                 val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
@@ -248,6 +263,7 @@ class StreamWatcher(
         updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
         streamStarted = stream.startedAt.toEpochSecond()
         currentElement = StreamElement(game, 0, videoId)
+        userId = stream.userId
         return withPing("live") { mention ->
             val embed = makeEmbed(stream, game, thumbnail.orElse(null), userLogin)
                 .setContent("$mention $userLogin is live with **${game.name}**!")
@@ -259,6 +275,7 @@ class StreamWatcher(
 
     private fun handleUpdate(stream: Stream, videoId: String): Mono<ReadonlyMessage> {
         timestamps.add(currentElement!!)
+        userId = stream.userId
         return mono {
             val game = twitch.getGame(stream).awaitFirstOrNull() ?: return@mono null
             log.info("Stream from $userLogin changed game ${currentElement?.game?.name} -> ${game.name}")
@@ -368,4 +385,10 @@ private fun makeEmbed(
             addFile("thumbnail.jpg", thumbnail)
         addEmbeds(embed)
     }
+}
+
+private fun limit(input: String, limit: Int): String {
+    if (input.length <= limit)
+        return input
+    return input.substring(0, limit) + "\u2026"
 }

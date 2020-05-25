@@ -82,7 +82,7 @@ If you don't know how to make a twitch application and access the client_id: [Ho
 
 ## Setup
 
-Currently I only provide 2 setups. Either [docker](https://hub.docker.com) or through a script.
+Currently, I only provide 2 setups. Either [docker](https://hub.docker.com) or through a script.
 I'm open for pull requests that introduce more or better setups.
 
 ### Docker

@@ -3,7 +3,7 @@
 [vod-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/vod-event.png
 [example-config]: https://github.com/MinnDevelopment/strumbot/blob/master/example-config.json
 
-[ ![docker-pulls](https://img.shields.io/docker/pulls/minnced/strumbot) ](https://hub.docker.com/repository/docker/minnced/strumbot)
+[ ![docker-pulls](https://img.shields.io/docker/pulls/minnced/strumbot) ](https://hub.docker.com/r/minnced/strumbot)
 [ ![release](https://img.shields.io/github/v/tag/minndevelopment/strumbot) ](https://github.com/MinnDevelopment/strumbot/releases/latest)
 
 # Strumbot
@@ -87,7 +87,7 @@ I'm open for pull requests that introduce more or better setups.
 
 ### Docker
 
-The image is hosted at [docker hub](https://hub.docker.com/repository/docker/minnced/strumbot).
+The image is hosted at [docker hub](https://hub.docker.com/r/minnced/strumbot).
 
 1. Open a terminal in the directory of your choice (which includes the `config.json`!)
 1. Pull the image with `docker pull minnced/strumbot:%VERSION%` (Replace `%VERSION%` with the version here: [latest release](https://github.com/MinnDevelopment/strumbot/releases/latest))

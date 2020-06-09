@@ -48,6 +48,15 @@ class NotAuthorizedError(
     response: Response
 ): Error("Authorization failed. Code: ${response.code()} Body: ${response.body()!!.string()}")
 
+inline fun post(url: String, form: FormBody.Builder.() -> Unit): Request {
+    val body = FormBody.Builder()
+    body.form()
+    return Request.Builder()
+        .url(url)
+        .method("POST", body.build())
+        .build()
+}
+
 class TwitchApi(
     private val http: OkHttpClient,
     private val scheduler: Scheduler,
@@ -63,13 +72,12 @@ class TwitchApi(
     private val games = FixedSizeMap<String, Game>(10)
 
     internal fun authorize(): Mono<Unit> = Mono.create { sink ->
-        val request = Request.Builder()
-            .url("https://id.twitch.tv/oauth2/token" +
-                    "?client_id=${clientId}" +
-                    "&client_secret=${clientSecret}" +
-                    "&grant_type=client_credentials")
-            .method("POST", emptyFormBody)
-            .build()
+        val request = post("https://id.twitch.tv/oauth2/token") {
+            add("client_id", clientId)
+            add("client_secret", clientSecret)
+            add("grant_type", "client_credentials")
+        }
+
         http.newCall(request).enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
                 sink.error(e)

@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "0.1.8"
+version = "0.1.9"
 
 repositories {
     jcenter()

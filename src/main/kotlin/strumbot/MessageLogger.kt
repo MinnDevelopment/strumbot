@@ -71,7 +71,7 @@ class MessageLogger(
            .filter { it.message.contentRaw != messageCache[it.messageIdLong]!!.content }
            .flatMap {
                val oldMessage = messageCache[it.messageIdLong]!!
-               val nesMessage = it.message
+               val newMessage = it.message
                val embed = WebhookEmbedBuilder()
                    .addField(EmbedField(
                        false, "Old Content",
@@ -79,17 +79,17 @@ class MessageLogger(
                    ))
                    .addField(EmbedField(
                        false, "New Content",
-                       nesMessage.contentRaw
+                       newMessage.contentRaw
                    ))
                    .setColor(EDIT_COLOR)
                    .setAuthor(EmbedAuthor("Message Edited ${oldMessage.userTag} (${oldMessage.userId})", null, null))
-                   .setTimestamp(nesMessage.timeEdited)
+                   .setTimestamp(newMessage.timeEdited)
                    .setFooter(EmbedFooter("#${it.channel.name}", null))
 
                messageCache[it.messageIdLong] = DiscordMessage(
                    it.author.id,
                    it.author.asTag,
-                   nesMessage.contentRaw
+                   newMessage.contentRaw
                )
                Mono.fromFuture { webhook.send(embed.build()) }
            }

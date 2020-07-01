@@ -22,8 +22,8 @@ repositories {
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("net.dv8tion:JDA:4.1.1_150")
-    implementation("club.minnced:jda-reactor:1.1.0")
+    implementation("net.dv8tion:JDA:4.2.0_+")
+    implementation("club.minnced:jda-reactor:1.2.0")
     implementation("club.minnced:discord-webhooks:0.3.1")
     implementation(kotlin("stdlib-jdk8"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.2")

@@ -42,7 +42,9 @@ import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.time.Duration
 import java.time.OffsetDateTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.time.temporal.ChronoUnit
 import java.util.*
 import java.util.concurrent.CompletableFuture
@@ -382,7 +384,11 @@ private fun makeEmbed(
         )
         builder.addField(
             EmbedField(
-                true, getText(language, "started_at"), stream.startedAt.format(DateTimeFormatter.RFC_1123_DATE_TIME)
+                true, getText(language, "started_at"),
+                stream.startedAt
+                    .toZonedDateTime() // We need a zone id to localize a time format
+                    .withZoneSameLocal(ZoneId.of("UTC")) // enforce UTC zone id for universal standardization
+                    .format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.FULL, FormatStyle.SHORT).withLocale(language))
             )
         )
         if (currentSegment != null) {

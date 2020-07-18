@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("com.github.johnrengelman.shadow") version "5.1.0"
-    id("org.jetbrains.kotlin.jvm") version "1.3.70"
+    kotlin("jvm") version "1.3.72"
     application
 }
 
@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "1.0.0"
+version = "1.0.1"
 
 repositories {
     jcenter()

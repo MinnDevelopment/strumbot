@@ -40,9 +40,11 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
-import reactor.core.publisher.toFlux
 import reactor.core.scheduler.Schedulers
+import reactor.kotlin.core.publisher.toFlux
+import reactor.util.retry.Retry
 import java.lang.Integer.max
+import java.time.Duration
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.TimeUnit
@@ -96,6 +98,7 @@ fun main() {
     }
 
     startTwitchService(twitch, watchedStreams, poolScheduler)
+        .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMinutes(1)).transientErrors(true))
         .doFinally {
             log.warn("Twitch service terminated unexpectedly with signal {}", it)
             jda.shutdownNow()
@@ -159,7 +162,7 @@ private fun setupRankListener(jda: JDA, configuration: Configuration) {
             }
         }
         .doOnError { log.error("Rank service encountered exception", it) }
-        .retry { it !is Error }
+        .retryWhen(Retry.indefinitely().filter { it !is Error })
         .subscribe()
 
     jda.on<MessageDeleteEvent>()

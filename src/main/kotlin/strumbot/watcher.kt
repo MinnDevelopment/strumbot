@@ -32,10 +32,11 @@ import org.slf4j.LoggerFactory
 import reactor.core.Exceptions
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
-import reactor.core.publisher.toFlux
-import reactor.core.publisher.toMono
 import reactor.core.scheduler.Scheduler
+import reactor.kotlin.core.publisher.toFlux
+import reactor.kotlin.core.publisher.toMono
 import reactor.util.function.Tuple4
+import reactor.util.retry.Retry
 import java.io.InputStream
 import java.net.SocketException
 import java.net.SocketTimeoutException
@@ -84,8 +85,8 @@ fun startTwitchService(
             })
         }
         .doOnError(::suppressExpected) { log.error("Error in twitch stream service", it) }
-        .retry { it !is Error && it !is HttpException }
-        .retryBackoff(2, Duration.ofSeconds(10))
+        .retryWhen(Retry.indefinitely().filter { it !is Error && it !is HttpException })
+        .retryWhen(Retry.backoff(2, Duration.ofSeconds(10)).transientErrors(true))
 }
 
 data class Timestamps(val display: String, val twitchFormat: String) {

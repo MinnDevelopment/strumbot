@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "1.0.3"
+version = "1.1.0"
 
 repositories {
     jcenter()
@@ -23,7 +23,8 @@ repositories {
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("net.dv8tion:JDA:4.2.0_+")
+//    implementation("net.dv8tion:JDA:4.2.0_+")
+    implementation("com.github.dv8fromtheworld:JDA:4c3d260")
     implementation("club.minnced:jda-reactor:1.2.0")
     implementation("club.minnced:discord-webhooks:0.3.1")
     implementation("io.projectreactor:reactor-core:3.3.8.RELEASE")

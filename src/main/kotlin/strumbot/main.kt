@@ -17,18 +17,17 @@
 @file:JvmName("Main")
 package strumbot
 
-import club.minnced.jda.reactor.*
+import club.minnced.jda.reactor.ReactiveEventManager
+import club.minnced.jda.reactor.asMono
+import club.minnced.jda.reactor.createManager
+import club.minnced.jda.reactor.on
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
-import net.dv8tion.jda.api.Permission
+import net.dv8tion.jda.api.entities.Command
 import net.dv8tion.jda.api.entities.Member
-import net.dv8tion.jda.api.entities.Message
-import net.dv8tion.jda.api.entities.MessageChannel
 import net.dv8tion.jda.api.entities.Role
 import net.dv8tion.jda.api.events.guild.GuildJoinEvent
 import net.dv8tion.jda.api.events.guild.GuildReadyEvent
-import net.dv8tion.jda.api.events.message.MessageDeleteEvent
-import net.dv8tion.jda.api.events.message.guild.GuildMessageReceivedEvent
 import net.dv8tion.jda.api.exceptions.HierarchyException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
@@ -75,8 +74,10 @@ fun main() {
 
     log.info("Initializing discord connection")
     val manager = createManager { this.scheduler = poolScheduler }
-    setupRankCreator(manager, configuration)
+    manager.initCommands(configuration)
+    manager.initRoles(configuration)
     val jda = JDABuilder.createLight(configuration.token, GatewayIntent.GUILD_MESSAGES)
+        .setRawEventsEnabled(true) // needed for slash commands
         .setEventManager(manager)
         .setHttpClient(okhttp)
         .setCallbackPool(pool)
@@ -111,10 +112,10 @@ fun main() {
     System.gc()
 }
 
-private fun setupRankCreator(jda: ReactiveEventManager, configuration: Configuration) {
+private fun ReactiveEventManager.initRoles(configuration: Configuration) {
     val listener = Flux.merge(
-        jda.on<GuildReadyEvent>().map(GuildReadyEvent::getGuild),
-        jda.on<GuildJoinEvent>().map(GuildJoinEvent::getGuild)
+        on<GuildReadyEvent>().map(GuildReadyEvent::getGuild),
+        on<GuildJoinEvent>().map(GuildJoinEvent::getGuild)
     )
 
     val ranks = configuration.ranks.values
@@ -129,93 +130,62 @@ private fun setupRankCreator(jda: ReactiveEventManager, configuration: Configura
         .subscribe { log.info("Created role ${it.name} in ${it.guild.name}") }
 }
 
-private fun setupRankListener(jda: JDA, configuration: Configuration) {
-    // Keep track of messages for cleanup when the invoking command is deleted
-    data class MessagePath(val channel: Long, val message: Long)
-    val messages = FixedSizeMap<Long, MessagePath>(10)
-
-    jda.on<GuildMessageReceivedEvent>()
-        .filter { filterId(it.guild, configuration.guildId) }
-        .map { it.message }
-        .filter { it.member != null }
-        .filter { it.contentRaw.startsWith("?rank ") }
-        .flatMap { message ->
-            val member = message.member!!
-            val mention = member.asMention
-            // The role name is after the command
-            val roleType = message.contentRaw.removePrefix("?rank ").toLowerCase()
-            // We shouldn't let users assign themselves any other roles like mod
-            val channel = message.channel
-            Mono.defer {
-                val roleName = configuration.ranks[roleType]
-                    ?: return@defer channel.sendMessage("$mention, That role is not supported!").asMono()
-
-                // Check if role by that name exists
-                val role = message.guild.getRolesByName(roleName, true).firstOrNull()
-                Mono.defer {
-                    if (role != null) // Add/Remove the role to the member and send a success message
-                        toggleRole(member, role, message, channel, mention)
-                    else              // Send a failure message, unknown role
-                        channel.sendMessage("$mention, That role does not exist!").asMono()
-                }.onErrorResume(PermissionException::class.java) { error ->
-                    log.error("Failed to execute rank command", error)
-                    handlePermissionError(error, channel, mention, role)
+private fun ReactiveEventManager.initCommands(configuration: Configuration) {
+    on<GuildReadyEvent>().map { it.guild }
+        .mergeWith(on<GuildJoinEvent>().map { it.guild })
+        .flatMap { guild ->
+            guild.createCommand("rank", "Add or remove one of the notification roles")
+                .addOption("role", "The role to assign or remove you from", Command.OptionType.STRING) {
+                    configuration.ranks.forEach { (_, value) -> it.addChoice(value, value) }
+                    it.setRequired(true)
                 }
-            }.doOnSuccess {
-                messages[message.idLong] = MessagePath(channel.idLong, it.idLong)
-            }
+                .asMono()
         }
-        .doOnError { log.error("Rank service encountered exception", it) }
-        .retryWhen(Retry.indefinitely().filter { it !is Error })
         .subscribe()
+}
 
-    jda.on<MessageDeleteEvent>()
-       .map { it.messageIdLong }
-       .filter(messages::containsKey)
-       .map(messages::getValue)
-       .flatMap {
-           val (channelId, messageId) = it
-           jda.getTextChannelById(channelId)
-             ?.deleteMessageById(messageId)
-             ?.asMono() ?: Mono.empty()
+private fun setupRankListener(jda: JDA, configuration: Configuration) {
+    jda.onCommand("rank")
+       .flatMap { event ->
+           val guild = event.guild ?: return@flatMap Mono.empty<Unit>()
+           val type = event.getOption("role")?.asString ?: ""
+           val role = guild.getRoleById(jda.getRoleByType(configuration, type)) ?: return@flatMap Mono.empty<Unit>()
+           val member = event.member ?: return@flatMap Mono.empty<Unit>()
+           event.acknowledge(true).queue() // This is required to handle delayed response
+           event.thread.setEphemeral(true)
+           toggleRole(member, role).flatMap {
+               event.thread.sendMessage(if (it) "Added the role" else "Removed the role").asMono()
+           }.onErrorResume(PermissionException::class.java) {
+               event.thread.sendMessage(handlePermissionError(it, role)).asMono()
+           }
        }
+       .retryWhen(Retry.indefinitely().filter { it !is Error })
        .subscribe()
 }
 
 private fun toggleRole(
     member: Member,
-    role: Role,
-    event: Message,
-    channel: MessageChannel,
-    mention: String
-): Mono<Message> {
-    return if (member.roles.any { it.idLong == role.idLong }) {
-        log.debug("Adding ${role.name} to ${member.user.asTag}")
-        event.guild.removeRoleFromMember(member, role).asMono().then {
-            channel.sendMessage("$mention, you left **${role.name}**.").asMono()
-        }
-    } else {
+    role: Role
+): Mono<Boolean> = Mono.defer {
+    if (role in member.roles) {
         log.debug("Removing ${role.name} from ${member.user.asTag}")
-        event.guild.addRoleToMember(member, role).asMono().then {
-            channel.sendMessage("$mention, you joined **${role.name}**.").asMono()
-        }
+        role.guild.removeRoleFromMember(member, role).asMono().thenReturn(false)
+    } else {
+        log.debug("Adding ${role.name} to ${member.user.asTag}")
+        role.guild.addRoleToMember(member, role).asMono().thenReturn(true)
     }
 }
 
 private fun handlePermissionError(
     error: PermissionException,
-    channel: MessageChannel,
-    mention: String,
     role: Role?
-): Mono<Message> {
-    if (error.permission == Permission.MESSAGE_WRITE || error.permission == Permission.MESSAGE_READ)
-        return Mono.empty() // Don't attempt to send another message if it already failed because of it
+): String {
     return when (error) {
         is InsufficientPermissionException ->
-            channel.sendMessage("$mention, I'm missing the permission **${error.permission.getName()}**").asMono()
+            "I'm missing the permission **${error.permission.getName()}**"
         is HierarchyException ->
-            channel.sendMessage("$mention, I can't assign a role to you because the role is too high! Role: ${role?.name}").asMono()
+            "I can't assign a role to you because the role is too high! Role: ${role?.name}"
         else ->
-            channel.sendMessage("$mention, encountered an error: `$error`!").asMono()
+            "Encountered an error: `$error`!"
     }
 }

@@ -16,9 +16,12 @@
 
 package strumbot
 
+import club.minnced.jda.reactor.on
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Guild
+import net.dv8tion.jda.api.events.interaction.SlashCommandEvent
 import net.dv8tion.jda.api.requests.RestAction
+import reactor.core.publisher.Flux
 import reactor.util.function.Tuple2
 import reactor.util.function.Tuple3
 import reactor.util.function.Tuple4
@@ -58,3 +61,5 @@ fun JDA.getRoleByType(configuration: Configuration, type: String): String {
 suspend fun <T> RestAction<T>.await() = suspendCoroutine<T> { cont ->
     queue(cont::resume, cont::resumeWithException)
 }
+
+fun JDA.onCommand(name: String): Flux<SlashCommandEvent> = on<SlashCommandEvent>().filter { it.name == name }

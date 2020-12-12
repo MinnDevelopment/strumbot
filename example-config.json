@@ -1,4 +1,5 @@
 {
+  "timezone": "PST",
   "discord": {
     "token": "NjUzMjM1MjY5MzM1NjQ2MjA4.*******.*******",
     "stream_notifications": "https://discordapp.com/api/webhooks/*******/******",

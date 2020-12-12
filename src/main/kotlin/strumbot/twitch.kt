@@ -30,7 +30,8 @@ import java.io.IOException
 import java.io.InputStream
 import java.time.Duration
 import java.time.Instant
-import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.ZonedDateTime
 
 class HttpException(route: String, status: Int, meaning: String)
     : Exception("$route > $status: $meaning") {
@@ -39,8 +40,8 @@ class HttpException(route: String, status: Int, meaning: String)
 
 private val emptyFormBody = RequestBody.create(MediaType.parse("form-data"), "")
 
-fun createTwitchApi(http: OkHttpClient, scheduler: Scheduler, clientId: String, clientSecret: String): Mono<TwitchApi> = Mono.defer {
-    val api = TwitchApi(http, scheduler, clientId, clientSecret, "N/A")
+fun createTwitchApi(http: OkHttpClient, scheduler: Scheduler, clientId: String, clientSecret: String, timezone: ZoneId): Mono<TwitchApi> = Mono.defer {
+    val api = TwitchApi(http, scheduler, clientId, clientSecret, timezone, "N/A")
     api.authorize().thenReturn(api)
 }
 
@@ -62,6 +63,7 @@ class TwitchApi(
     private val scheduler: Scheduler,
     private val clientId: String,
     private val clientSecret: String,
+    private val timezone: ZoneId,
     private var accessToken: String) {
 
     companion object {
@@ -170,7 +172,7 @@ class TwitchApi(
                         stream.getString("thumbnail_url"),
                         stream.getString("user_id"),
                         stream.getString("user_name"),
-                        OffsetDateTime.parse(stream.getString("started_at"))
+                        ZonedDateTime.parse(stream.getString("started_at")).withZoneSameInstant(timezone)
                     )
                 }
             }
@@ -239,7 +241,7 @@ class TwitchApi(
             repeat(data.length()) { i ->
                 val video = data.getObject(i)
                 val type = video.getString("type")
-                val createdAt = OffsetDateTime.parse(video.getString("created_at"))
+                val createdAt = ZonedDateTime.parse(video.getString("created_at")).withZoneSameInstant(timezone)
                 // Stream vods are always type archive (other types are highlight and upload)
                 if (type == "archive" && !stream.startedAt.isAfter(createdAt)) {
                     return@makeRequest buildVideo(video)
@@ -322,7 +324,7 @@ data class Stream(
     val thumbnail: String,
     val userId: String,
     val userLogin: String,
-    val startedAt: OffsetDateTime)
+    val startedAt: ZonedDateTime)
 data class Video(
     val id: String,
     val url: String,

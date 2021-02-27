@@ -20,7 +20,7 @@ A Twitch Stream Notification Bot. This will send notifications to a webhook in y
 The configuration file must be called `config.json` and has to be in the working directory. An example configuration can be found in [`example-config.json`][example-config].
 Anything marked with **(optional)** can be set to `null` to be disabled.
 
-The `timezone` property configures the zone which uis used to display the **started at** section of the announcement embed.
+The `timezone` property configures the zone which is used to display the **started at** section of the announcement embed.
 This can parse offsets with the formats described [here](https://docs.oracle.com/javase/8/docs/api/java/time/ZoneId.html#of-java.lang.String-) and [here](https://docs.oracle.com/javase/8/docs/api/java/time/ZoneId.html#SHORT_IDS).
 If this field is omitted, the timezone will be GMT.
 

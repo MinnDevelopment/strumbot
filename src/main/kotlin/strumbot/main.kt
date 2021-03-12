@@ -77,7 +77,6 @@ fun main() {
     manager.initCommands(configuration)
     manager.initRoles(configuration)
     val jda = JDABuilder.createLight(configuration.token, GatewayIntent.GUILD_MESSAGES)
-        .setRawEventsEnabled(true) // needed for slash commands
         .setEventManager(manager)
         .setHttpClient(okhttp)
         .setCallbackPool(pool)

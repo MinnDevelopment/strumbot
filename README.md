@@ -1,6 +1,7 @@
 [live-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/live-event.png
 [update-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/update-event.png
 [vod-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/vod-event.png
+[rank-joining]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/patch-slash-commands/assets/readme/rank-joining.gif
 [example-config]: https://github.com/MinnDevelopment/strumbot/blob/master/example-config.json
 
 [ ![docker-pulls](https://img.shields.io/docker/pulls/minnced/strumbot) ](https://hub.docker.com/r/minnced/strumbot)
@@ -40,10 +41,15 @@ If you don't know how to create a discord bot and get access to the token: [How 
 The roles used for updates can be managed by the bot with the `?rank <type>` command.
 This command will automatically assign the role to the user.
 
-For example, with the configuration `"live": "Stream is Live"` the bot will accept the command `?rank live` and assign/remove the role `Stream is Live` for the user.
-The bot will automatically delete its own message if the invoking message is deleted by the user or an admin.
+For example, with the configuration `"live": "Stream is Live"` the bot will accept the command `/rank role: live` and assign/remove the role `Stream is Live` for the user.
+These commands are *ephemeral*, which means they only show up to the user who invokes them. This way you can use them anywhere without having any clutter in chat!
+
+![rank-joining.gif][rank-joining]
+
 
 #### Events
+
+![vod-event.png][vod-event]
 
 - [`live`][live-event] When the streamer goes live
 - [`update`][update-event] When the streamer changes the current game

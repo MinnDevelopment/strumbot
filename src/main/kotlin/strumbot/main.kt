@@ -133,7 +133,7 @@ private fun ReactiveEventManager.initCommands(configuration: Configuration) {
     on<GuildReadyEvent>().map { it.guild }
         .mergeWith(on<GuildJoinEvent>().map { it.guild })
         .flatMap { guild ->
-            guild.createCommand("rank", "Add or remove one of the notification roles")
+            guild.upsertCommand("rank", "Add or remove one of the notification roles")
                 .addOption("role", "The role to assign or remove you from", Command.OptionType.STRING) {
                     configuration.ranks.forEach { (_, value) -> it.addChoice(value, value) }
                     it.setRequired(true)
@@ -151,11 +151,11 @@ private fun setupRankListener(jda: JDA, configuration: Configuration) {
            val role = guild.getRoleById(jda.getRoleByType(configuration, type)) ?: return@flatMap Mono.empty<Unit>()
            val member = event.member ?: return@flatMap Mono.empty<Unit>()
            event.acknowledge(true).queue() // This is required to handle delayed response
-           event.thread.setEphemeral(true)
+           event.hook.setEphemeral(true)
            toggleRole(member, role).flatMap {
-               event.thread.sendMessage(if (it) "Added the role" else "Removed the role").asMono()
+               event.hook.sendMessage(if (it) "Added the role" else "Removed the role").asMono()
            }.onErrorResume(PermissionException::class.java) {
-               event.thread.sendMessage(handlePermissionError(it, role)).asMono()
+               event.hook.sendMessage(handlePermissionError(it, role)).asMono()
            }
        }
        .retryWhen(Retry.indefinitely().filter { it !is Error })

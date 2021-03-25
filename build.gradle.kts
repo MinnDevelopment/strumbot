@@ -15,20 +15,21 @@ group = "dev.minn"
 version = "1.1.0"
 
 repositories {
-    jcenter()
-    maven("https://oss.jfrog.org/artifactory/libs-release")
-    maven("https://repo.spring.io/milestone")
-    maven("https://jitpack.io")
+    mavenLocal() // caching optimization
+    mavenCentral() // everything else
+    maven("https://m2.dv8tion.net/releases") // jda
+    maven("https://jitpack.io") // jda-reactor and slash commands
 }
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-//    implementation("net.dv8tion:JDA:4.2.0_+")
-    implementation("com.github.dv8fromtheworld:JDA:4c3d260")
-    implementation("club.minnced:jda-reactor:1.2.0")
-    implementation("club.minnced:discord-webhooks:0.3.1")
-    implementation("io.projectreactor:reactor-core:3.3.8.RELEASE")
-    implementation("io.projectreactor.kotlin:reactor-kotlin-extensions:1.1.0-M1")
+    implementation("com.github.dv8fromtheworld:JDA:79dc33e") {
+        exclude(module="opus-java")
+    }
+    implementation("com.github.minndevelopment:jda-reactor:77d7fcb")
+    implementation("club.minnced:discord-webhooks:0.5.6")
+    implementation("io.projectreactor:reactor-core:3.3.15.RELEASE")
+    implementation("io.projectreactor.kotlin:reactor-kotlin-extensions:1.1.3")
     implementation(kotlin("stdlib-jdk8"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.3.7")

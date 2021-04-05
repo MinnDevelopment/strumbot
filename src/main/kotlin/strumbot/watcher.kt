@@ -27,6 +27,7 @@ import kotlinx.coroutines.reactive.awaitFirstOrNull
 import kotlinx.coroutines.reactor.mono
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Activity
+import net.dv8tion.jda.api.utils.MarkdownUtil.maskedLink
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import reactor.core.Exceptions
@@ -235,7 +236,7 @@ class StreamWatcher(
                             .withIndex()
                             .map { (i, it) ->
                                 // <index> <Title> - <ViewCount> views
-                                "`${i + 1}.` [${limit(it.title, 25)} \uD83E\uDC55](${it.url}) \u2022 **${it.views}**\u00A0views"
+                                "`${i + 1}.` ${maskedLink(limit(it.title, 25) + " \uD83E\uDC55", it.url)} \u2022 **${it.views}**\u00A0views"
                             }
                             .joinToString("\n")
                     ))

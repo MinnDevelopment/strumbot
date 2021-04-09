@@ -23,11 +23,11 @@ repositories {
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("com.github.dv8fromtheworld:JDA:79dc33e") {
+    implementation("com.github.dv8fromtheworld:JDA:8b073dd") {
         exclude(module="opus-java")
     }
     implementation("com.github.minndevelopment:jda-reactor:77d7fcb")
-    implementation("club.minnced:discord-webhooks:0.5.6")
+    implementation("com.github.minndevelopment:jda-ktx:adf3062")
     implementation("io.projectreactor:reactor-core:3.3.15.RELEASE")
     implementation("io.projectreactor.kotlin:reactor-kotlin-extensions:1.1.3")
     implementation(kotlin("stdlib-jdk8"))

@@ -89,16 +89,12 @@ fun main() {
     activityService.start()
 
     setupRankListener(jda, configuration)
-    // Optional message logging
-    configuration.messageLogs?.let { messageWebhook ->
-        MessageLogger(messageWebhook, pool, jda, configuration)
-    }
 
     jda.awaitReady()
 
     val watchedStreams = mutableMapOf<String, StreamWatcher>()
     for (userLogin in configuration.twitchUser) {
-        watchedStreams[userLogin] = StreamWatcher(twitch, jda, configuration, userLogin, pool, activityService)
+        watchedStreams[userLogin] = StreamWatcher(twitch, jda, configuration, userLogin, activityService)
     }
 
     startTwitchService(twitch, watchedStreams, poolScheduler)

@@ -34,7 +34,6 @@ If you don't know how to create a discord bot and get access to the token: [How 
 
 - `token` The discord bot token
 - `stream_notifications` The webhook URL to send stream updates to (see [How to create a webhook](https://github.com/MinnDevelopment/strumbot/blob/master/guides/HOW_TO_CREATE_A_WEBHOOK.md))
-- `message_logs` **(optional)** The webhook URL for message logs (edits/deletes)
 - `role_name` Configuration of `type`->`role` to change the default names of the update roles
 - `enabled_events` Array of events to publish to the `stream_notifications` webhook
 
@@ -73,7 +72,6 @@ If you don't know how to make a twitch application and access the client_id: [Ho
   "discord": {
     "token": "NjUzMjM1MjY5MzM1NjQ2MjA4.*******.*******",
     "stream_notifications": "https://discordapp.com/api/webhooks/*******/******",
-    "message_logs": null,
     "role_name": {
       "live": "live",
       "vod": "vod",

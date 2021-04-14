@@ -25,6 +25,7 @@ import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
 import net.dv8tion.jda.api.entities.Command
 import net.dv8tion.jda.api.entities.Member
+import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.Role
 import net.dv8tion.jda.api.events.guild.GuildJoinEvent
 import net.dv8tion.jda.api.events.guild.GuildReadyEvent
@@ -33,6 +34,7 @@ import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
 import net.dv8tion.jda.api.requests.GatewayIntent
 import net.dv8tion.jda.api.requests.restaction.RoleAction
+import net.dv8tion.jda.api.utils.AllowedMentions
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import org.slf4j.Logger
@@ -44,6 +46,7 @@ import reactor.kotlin.core.publisher.toFlux
 import reactor.util.retry.Retry
 import java.lang.Integer.max
 import java.time.Duration
+import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.TimeUnit
@@ -60,6 +63,8 @@ private val pool = Executors.newScheduledThreadPool(getThreadCount()) {
 private val poolScheduler = Schedulers.fromExecutor(pool)
 
 fun main() {
+    AllowedMentions.setDefaultMentions(EnumSet.of(Message.MentionType.ROLE))
+
     val configuration = loadConfiguration("config.json")
     val okhttp = OkHttpClient.Builder()
         .connectionPool(ConnectionPool(2, 20, TimeUnit.SECONDS))
@@ -83,6 +88,10 @@ fun main() {
         .setGatewayPool(pool)
         .setRateLimitPool(pool)
         .build()
+
+    configuration.logging?.let {
+        WebhookAppender.init(jda, it)
+    }
 
     // Cycling streaming status
     val activityService = ActivityService(jda, poolScheduler)

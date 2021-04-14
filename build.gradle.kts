@@ -23,7 +23,7 @@ repositories {
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("com.github.dv8fromtheworld:JDA:8b073dd") {
+    implementation("com.github.dv8fromtheworld:JDA:7c2a506") {
         exclude(module="opus-java")
     }
     implementation("com.github.minndevelopment:jda-reactor:77d7fcb")

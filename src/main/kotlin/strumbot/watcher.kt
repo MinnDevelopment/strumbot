@@ -226,7 +226,7 @@ class StreamWatcher(
                 appendIndex(index)
                 if (clips.isNotEmpty()) field {
                     inline = false
-                    name= getText(language, "offline.clips")
+                    name = getText(language, "offline.clips")
                     value = clips.asSequence()
                         .withIndex()
                         .map { (i, it) ->
@@ -368,9 +368,7 @@ private fun makeEmbedBase(title: String, url: String) = EmbedBuilder {
     color = 0x6441A4
     image = "attachment://thumbnail.jpg"
     this.title = url
-    author {
-        name = title
-    }
+    author(title)
 }
 
 private fun makeEmbed(
@@ -380,16 +378,11 @@ private fun makeEmbed(
     twitchName: String,
     currentSegment: StreamElement? = null
 ) = makeEmbedBase(stream.title, "https://www.twitch.tv/$twitchName").apply {
-    field {
-        name = getText(language, "playing")
-        value = game.name
-        inline = true
-    }
-    field {
-        name = getText(language, "started_at")
-        value = stream.startedAt.format(DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(language))
-        inline = true
-    }
+    field(getText(language, "playing"), game.name)
+    field(
+        name=getText(language, "started_at"),
+        value=stream.startedAt.format(DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(language))
+    )
     if (currentSegment != null) {
         description = "Start watching at ${currentSegment.toVodLink("")}"
     }

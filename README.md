@@ -38,7 +38,7 @@ If you don't know how to create a discord bot and get access to the token: [How 
 - `enabled_events` Array of events to publish to the `stream_notifications` webhook
 - `logging` Optional webhook URL for errors and warnings printed at runtime (omit or null to disable)
 
-The roles used for updates can be managed by the bot with the `?rank <type>` command.
+The roles used for updates can be managed by the bot with the `/rank role: <type>` command.
 This command will automatically assign the role to the user.
 
 For example, with the configuration `"live": "Stream is Live"` the bot will accept the command `/rank role: live` and assign/remove the role `Stream is Live` for the user.

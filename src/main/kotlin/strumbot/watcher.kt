@@ -240,7 +240,7 @@ class StreamWatcher(
 
             withPing("vod") { mention ->
                 val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
-                val content = "$mention ${getText(language, "offline.content", "time" to duration)}"
+                val content = "$mention ${getText(language, "offline.content", "name" to userLogin, "time" to duration)}"
                 val message = Message(content = content, embed = embed.build())
                 webhook.fireEvent("vod") {
                     sendMessage(message).apply {

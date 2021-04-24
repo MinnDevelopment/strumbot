@@ -39,7 +39,7 @@ class WebhookAppender : AppenderBase<LoggingEvent>() {
         val embed = Embed {
             description = eventObject.formattedMessage
             eventObject.throwableProxy?.let {
-                description += "```\n$it\n```"
+                description += "```\n${it.cause}\n```"
             }
             when (eventObject.level.toInt()) {
                 Level.ERROR_INT -> color = 0xFF0000

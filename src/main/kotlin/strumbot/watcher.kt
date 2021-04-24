@@ -139,6 +139,7 @@ class StreamWatcher(
                 stream.gameId != currentElement?.game?.gameId -> {
                     offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                     twitch.getVideoByStream(stream)
+                        .ignoreFailure()
                         .map(Video::id).switchIfEmpty("".toMono())
                         .flatMap { handleUpdate(stream, it) }
                 }
@@ -150,6 +151,7 @@ class StreamWatcher(
                     if (currentElement?.videoId == "") { // if twitch failed to provide a vod link try updating it
                         twitch.getVideoByStream(stream)
                             .map(Video::id)
+                            .ignoreFailure()
                             .flatMap {
                                 currentElement?.apply { videoId = it }
                                 Mono.empty<Message>()
@@ -163,9 +165,10 @@ class StreamWatcher(
             if (stream != null) {
                 offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
                 val getStream = stream.toMono()
-                val getGame = twitch.getGame(stream)
-                val getVod = twitch.getVideoByStream(stream).map(Video::id).switchIfEmpty("".toMono())
+                val getGame = twitch.getGame(stream).ignoreFailure()
+                val getVod = twitch.getVideoByStream(stream).ignoreFailure().map(Video::id).switchIfEmpty("".toMono())
                 val getThumbnail = twitch.getThumbnail(stream)
+                    .ignoreFailure()
                     .map { Optional.of(it) }
                     .switchIfEmpty(Optional.empty<InputStream>().toMono())
 
@@ -212,13 +215,13 @@ class StreamWatcher(
                 .toFlux()
                 .map { it.videoId }
                 .flatMap { twitch.getVideoById(it) }
-                .awaitFirstOrNull()
+                .await()
 
-            val thumbnail = video?.let { twitch.getThumbnail(it).awaitFirstOrNull() }
+            val thumbnail = video?.let { twitch.getThumbnail(it).await() }
             val videoUrl = firstSegment.toVideoUrl()
 
             val clips = if (configuration.topClips > 0)
-                twitch.getTopClips(userId, streamStarted, configuration.topClips).awaitFirstOrNull() ?: emptyList()
+                twitch.getTopClips(userId, streamStarted, configuration.topClips).await() ?: emptyList()
             else
                 emptyList()
 
@@ -280,12 +283,12 @@ class StreamWatcher(
         timestamps.add(currentElement!!)
         userId = stream.userId
         return mono {
-            val game = twitch.getGame(stream).awaitFirstOrNull() ?: return@mono null
+            val game = twitch.getGame(stream).await() ?: return@mono null
             log.info("Stream from $userLogin changed game ${currentElement?.game?.name} -> ${game.name}")
             updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
             val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
             currentElement = StreamElement(game, timestamp, videoId)
-            val thumbnail = twitch.getThumbnail(stream).awaitFirstOrNull()
+            val thumbnail = twitch.getThumbnail(stream).await()
 
             withPing("update") { mention ->
                 val content = "$mention ${getText(language, "update.content",

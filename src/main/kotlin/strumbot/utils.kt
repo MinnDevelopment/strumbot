@@ -17,11 +17,14 @@
 package strumbot
 
 import club.minnced.jda.reactor.on
+import kotlinx.coroutines.reactive.awaitFirstOrNull
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Guild
 import net.dv8tion.jda.api.events.interaction.SlashCommandEvent
 import net.dv8tion.jda.api.requests.RestAction
+import org.slf4j.LoggerFactory
 import reactor.core.publisher.Flux
+import reactor.core.publisher.Mono
 import reactor.util.function.Tuple2
 import reactor.util.function.Tuple3
 import reactor.util.function.Tuple4
@@ -63,3 +66,13 @@ suspend fun <T> RestAction<T>.await() = suspendCoroutine<T> { cont ->
 }
 
 fun JDA.onCommand(name: String): Flux<SlashCommandEvent> = on<SlashCommandEvent>().filter { it.name == name }
+
+fun <T> Mono<T>.ignoreFailure(): Mono<T> =
+    doOnError { LoggerFactory.getLogger(StreamWatcher::class.java).error("Could not fetch video.", it) }
+      .onErrorResume(HttpException::class.java) { Mono.empty() }
+fun <T> Flux<T>.ignoreFailure(): Flux<T> =
+    doOnError { LoggerFactory.getLogger(StreamWatcher::class.java).error("Could not fetch video.", it) }
+        .onErrorResume(HttpException::class.java) { Mono.empty() }
+
+suspend fun <T> Mono<T>.await(): T? = ignoreFailure().awaitFirstOrNull()
+suspend fun <T> Flux<T>.await(): T? = ignoreFailure().awaitFirstOrNull()

@@ -214,6 +214,7 @@ class StreamWatcher(
                 .asReversed()
                 .toFlux()
                 .map { it.videoId }
+                .filter { it.isNotEmpty() }
                 .flatMap { twitch.getVideoById(it) }
                 .await()
 

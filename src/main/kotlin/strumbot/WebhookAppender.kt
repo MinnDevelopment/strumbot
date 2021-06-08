@@ -22,15 +22,14 @@ import ch.qos.logback.core.AppenderBase
 import dev.minn.jda.ktx.Embed
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.WebhookClient
-import net.dv8tion.jda.api.requests.restaction.WebhookMessageAction
 import java.time.Instant
 
 class WebhookAppender : AppenderBase<LoggingEvent>() {
     companion object {
-        private var client: WebhookClient<WebhookMessageAction>? = null
+        private var client: WebhookClient<*>? = null
 
         fun init(api: JDA, url: String) {
-            client = WebhookClient.createClient(api, url)
+            client = url.asWebhook(api)
         }
     }
 
@@ -39,7 +38,7 @@ class WebhookAppender : AppenderBase<LoggingEvent>() {
         val embed = Embed {
             description = eventObject.formattedMessage
             eventObject.throwableProxy?.let {
-                description += "```\n${it.cause}\n```"
+                description += "```\n${it.className}: ${it.message}\n```"
             }
             when (eventObject.level.toInt()) {
                 Level.ERROR_INT -> color = 0xFF0000
@@ -49,8 +48,8 @@ class WebhookAppender : AppenderBase<LoggingEvent>() {
             timestamp = Instant.ofEpochMilli(eventObject.timeStamp)
         }
 
-        client?.sendMessage(embed)
-              ?.setUsername("Error Log")
+        client?.sendMessageEmbeds(embed)
+              //?.setUsername("Error Log")
               ?.queue()
     }
 }

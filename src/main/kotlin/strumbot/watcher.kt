@@ -47,6 +47,11 @@ import java.time.OffsetDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import java.util.*
+import strumbot.ignoreFailure
+import strumbot.component1
+import strumbot.component2
+import strumbot.component3
+import strumbot.component4
 
 private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
 const val OFFLINE_DELAY = 2L * 60L // 2 minutes
@@ -124,9 +129,9 @@ class StreamWatcher(
     private var userId: String = ""
     private var language: Locale = Locale.forLanguageTag("en")
     private val timestamps: MutableList<StreamElement> = mutableListOf()
-    private val webhook = WebhookClient.createClient(jda, configuration.streamNotifications)
+    private val webhook: WebhookClient<*> = configuration.streamNotifications.asWebhook(jda)
 
-    fun handle(stream: Stream?): Mono<Message> {
+    fun handle(stream: Stream?): Mono<*> {
         // There are 4 states we can process
         return if (currentElement != null) {
             when {
@@ -188,12 +193,12 @@ class StreamWatcher(
 
     /// EVENTS
 
-    private fun handleOffline(): Mono<Message> {
+    private fun handleOffline(): Mono<*> {
         if (offlineTimestamp == 0L) {
             offlineTimestamp = OffsetDateTime.now().toEpochSecond()
-            return Mono.empty()
+            return Mono.empty<Unit>()
         } else if (OffsetDateTime.now().toEpochSecond() - offlineTimestamp < OFFLINE_DELAY) {
-            return Mono.empty()
+            return Mono.empty<Unit>()
         }
 
         log.info("Stream from $userLogin went offline!")
@@ -248,15 +253,15 @@ class StreamWatcher(
                 val message = Message(content = content, embed = embed.build())
                 webhook.fireEvent("vod") {
                     sendMessage(message).apply {
-                        setUsername(HOOK_NAME)
-                        thumbnail?.let { addFile("thumbnail.jpg", it) }
+//                        setUsername(HOOK_NAME)
+                        thumbnail?.let { addFile(it, "thumbnail.jpg") }
                     }
                 }
             }.awaitFirstOrNull()
         }
     }
 
-    private fun handleGoLive(tuple: Tuple4<Stream, Game, String, Optional<InputStream>>): Mono<Message> {
+    private fun handleGoLive(tuple: Tuple4<Stream, Game, String, Optional<InputStream>>): Mono<*> {
         val (stream, game, videoId, thumbnail) = tuple
         language = getLocale(stream)
         log.info("Stream from $userLogin started with game ${game.name} (${game.gameId})")
@@ -273,14 +278,14 @@ class StreamWatcher(
             val message = Message(content = content, embed = embed)
             webhook.fireEvent("live") {
                 sendMessage(message).apply {
-                    setUsername(HOOK_NAME)
-                    thumbnail.ifPresent { addFile("thumbnail.jpg", it) }
+//                    setUsername(HOOK_NAME)
+                    thumbnail.ifPresent { addFile(it, "thumbnail.jpg") }
                 }
             }
         }
     }
 
-    private fun handleUpdate(stream: Stream, videoId: String): Mono<Message> {
+    private fun handleUpdate(stream: Stream, videoId: String): Mono<*> {
         timestamps.add(currentElement!!)
         userId = stream.userId
         return mono {
@@ -300,8 +305,8 @@ class StreamWatcher(
                 val message = Message(content = content, embed = embed)
                 webhook.fireEvent("update") {
                     sendMessage(message).apply {
-                        setUsername(HOOK_NAME)
-                        thumbnail?.let { addFile("thumbnail.jpg", thumbnail) }
+//                        setUsername(HOOK_NAME)
+                        thumbnail?.let { addFile(thumbnail, "thumbnail.jpg") }
                     }
                 }
             }.awaitFirstOrNull()

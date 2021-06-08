@@ -23,7 +23,7 @@ import club.minnced.jda.reactor.createManager
 import club.minnced.jda.reactor.on
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
-import net.dv8tion.jda.api.entities.Command
+import net.dv8tion.jda.api.interactions.commands.Command
 import net.dv8tion.jda.api.entities.Member
 import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.Role
@@ -32,6 +32,8 @@ import net.dv8tion.jda.api.events.guild.GuildReadyEvent
 import net.dv8tion.jda.api.exceptions.HierarchyException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
+import net.dv8tion.jda.api.interactions.commands.OptionType
+import net.dv8tion.jda.api.interactions.commands.build.OptionData
 import net.dv8tion.jda.api.requests.GatewayIntent
 import net.dv8tion.jda.api.requests.restaction.RoleAction
 import net.dv8tion.jda.api.utils.AllowedMentions
@@ -138,11 +140,11 @@ private fun ReactiveEventManager.initCommands(configuration: Configuration) {
     on<GuildReadyEvent>().map { it.guild }
         .mergeWith(on<GuildJoinEvent>().map { it.guild })
         .flatMap { guild ->
-            guild.upsertCommand("rank", "Add or remove one of the notification roles")
-                .addOption("role", "The role to assign or remove you from", Command.OptionType.STRING) {
+            guild.upsertCommand("rank", "Add or remove one of the notification roles") // TODO: Use jda-ktx
+                .addOptions(OptionData(OptionType.STRING, "role", "The role to assign or remove you from").also {
                     configuration.ranks.forEach { (_, value) -> it.addChoice(value, value) }
-                    it.setRequired(true)
-                }
+                    it.isRequired = true
+                })
                 .asMono()
         }
         .subscribe()
@@ -155,7 +157,7 @@ private fun setupRankListener(jda: JDA, configuration: Configuration) {
            val type = event.getOption("role")?.asString ?: ""
            val role = guild.getRoleById(jda.getRoleByType(configuration, type)) ?: return@flatMap Mono.empty<Unit>()
            val member = event.member ?: return@flatMap Mono.empty<Unit>()
-           event.acknowledge(true).queue() // This is required to handle delayed response
+           event.deferReply(true).queue() // This is required to handle delayed response
            event.hook.setEphemeral(true)
            toggleRole(member, role).flatMap {
                event.hook.sendMessage(if (it) "Added the role" else "Removed the role").asMono()

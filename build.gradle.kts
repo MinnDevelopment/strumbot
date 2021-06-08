@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("com.github.johnrengelman.shadow") version "5.1.0"
-    kotlin("jvm") version "1.3.72"
+    kotlin("jvm") version "1.5.10"
     application
 }
 
@@ -23,7 +23,7 @@ repositories {
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("com.github.dv8fromtheworld:JDA:7c2a506") {
+    implementation("net.dv8tion:JDA:4.2.1_272") {
         exclude(module="opus-java")
     }
     implementation("com.github.minndevelopment:jda-reactor:77d7fcb")
@@ -31,8 +31,8 @@ dependencies {
     implementation("io.projectreactor:reactor-core:3.3.15.RELEASE")
     implementation("io.projectreactor.kotlin:reactor-kotlin-extensions:1.1.3")
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.7")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.3.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.5.0")
 }
 
 val clean by tasks

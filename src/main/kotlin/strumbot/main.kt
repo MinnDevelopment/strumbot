@@ -75,8 +75,7 @@ fun main() {
     log.info("Initializing twitch api")
     val twitch = createTwitchApi(
         okhttp, poolScheduler,
-        configuration.twitchClientId, configuration.twitchClientSecret,
-        configuration.timezone
+        configuration.twitchClientId, configuration.twitchClientSecret
     ).block()!!
 
     log.info("Initializing discord connection")

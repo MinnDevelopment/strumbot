@@ -33,7 +33,6 @@ data class Configuration(
     val logging: String?,
     val guildId: Long,
     val topClips: Int,
-    val timezone: ZoneId,
     val ranks: Map<String, String>,
     val events: Set<String>,
     val twitchUser: Set<String>
@@ -78,7 +77,6 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
         discord.getString("logging", null),
         discord.getLong("server_id", 0L),
         min(5, max(0, twitch.getInt("top_clips", 0))),
-        timezone,
         roles, events, userLogin
     )
 }

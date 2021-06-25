@@ -266,7 +266,7 @@ class StreamWatcher(
         language = getLocale(stream)
         log.info("Stream from $userLogin started with game ${game.name} (${game.gameId})")
         updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
-        streamStarted = stream.startedAt.toEpochSecond()
+        streamStarted = stream.startedAt
         currentElement = StreamElement(game, 0, videoId)
         userId = stream.userId
         return withPing("live") { mention ->
@@ -292,8 +292,8 @@ class StreamWatcher(
             val game = twitch.getGame(stream).await() ?: return@mono null
             log.info("Stream from $userLogin changed game ${currentElement?.game?.name} -> ${game.name}")
             updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
-            val timestamp = stream.startedAt.until(OffsetDateTime.now(), ChronoUnit.SECONDS).toInt()
-            currentElement = StreamElement(game, timestamp, videoId)
+            val timestamp = System.currentTimeMillis() / 1000 - stream.startedAt
+            currentElement = StreamElement(game, timestamp.toInt(), videoId)
             val thumbnail = twitch.getThumbnail(stream).await()
 
             withPing("update") { mention ->
@@ -390,7 +390,7 @@ private fun makeEmbed(
     field(getText(language, "playing"), game.name)
     field(
         name=getText(language, "started_at"),
-        value=stream.startedAt.format(DateTimeFormatter.RFC_1123_DATE_TIME.withLocale(language))
+        value="<t:${stream.startedAt}:F>"
     )
     if (currentSegment != null) {
         description = "Start watching at ${currentSegment.toVodLink("")}"

@@ -40,8 +40,8 @@ class HttpException(route: String, status: Int, meaning: String)
 
 private val emptyFormBody = RequestBody.create(MediaType.parse("form-data"), "")
 
-fun createTwitchApi(http: OkHttpClient, scheduler: Scheduler, clientId: String, clientSecret: String, timezone: ZoneId): Mono<TwitchApi> = Mono.defer {
-    val api = TwitchApi(http, scheduler, clientId, clientSecret, timezone, "N/A")
+fun createTwitchApi(http: OkHttpClient, scheduler: Scheduler, clientId: String, clientSecret: String): Mono<TwitchApi> = Mono.defer {
+    val api = TwitchApi(http, scheduler, clientId, clientSecret, "N/A")
     api.authorize().thenReturn(api)
 }
 
@@ -63,7 +63,6 @@ class TwitchApi(
     private val scheduler: Scheduler,
     private val clientId: String,
     private val clientSecret: String,
-    private val timezone: ZoneId,
     private var accessToken: String) {
 
     companion object {
@@ -172,7 +171,7 @@ class TwitchApi(
                         stream.getString("thumbnail_url"),
                         stream.getString("user_id"),
                         stream.getString("user_name"),
-                        ZonedDateTime.parse(stream.getString("started_at")).withZoneSameInstant(timezone)
+                        ZonedDateTime.parse(stream.getString("started_at")).toEpochSecond()
                     )
                 }
             }
@@ -241,9 +240,9 @@ class TwitchApi(
             repeat(data.length()) { i ->
                 val video = data.getObject(i)
                 val type = video.getString("type")
-                val createdAt = ZonedDateTime.parse(video.getString("created_at")).withZoneSameInstant(timezone)
+                val createdAt = ZonedDateTime.parse(video.getString("created_at")).toEpochSecond()
                 // Stream vods are always type archive (other types are highlight and upload)
-                if (type == "archive" && !stream.startedAt.isAfter(createdAt)) {
+                if (type == "archive" && stream.startedAt <= createdAt) {
                     return@makeRequest buildVideo(video)
                 }
             }
@@ -327,7 +326,7 @@ data class Stream(
     val thumbnail: String,
     val userId: String,
     val userLogin: String,
-    val startedAt: ZonedDateTime)
+    val startedAt: Long)
 data class Video(
     val id: String,
     val url: String,

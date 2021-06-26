@@ -1,7 +1,7 @@
 [live-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/live-event.png
 [update-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/update-event.png
 [vod-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/vod-event.png
-[rank-joining]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/patch-slash-commands/assets/readme/rank-joining.gif
+[rank-joining]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/rank-joining.gif
 [example-config]: https://github.com/MinnDevelopment/strumbot/blob/master/example-config.json
 
 [ ![docker-pulls](https://img.shields.io/docker/pulls/minnced/strumbot) ](https://hub.docker.com/r/minnced/strumbot)

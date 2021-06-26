@@ -52,8 +52,6 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
 
     log.info("Loaded config from ${file.canonicalPath}")
 
-    val timezone = ZoneId.of(json.getString("timezone", "Z"), ZoneId.SHORT_IDS)
-
     val discord = json.getObject("discord")
     val twitch = json.getObject("twitch")
     val roles = discord.getObject("role_name").run {

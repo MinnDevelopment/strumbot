@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("com.github.johnrengelman.shadow") version "5.1.0"
-    kotlin("jvm") version "1.3.72"
+    kotlin("jvm") version "1.5.10"
     application
 }
 
@@ -12,25 +12,27 @@ application {
 }
 
 group = "dev.minn"
-version = "1.0.3"
+version = "1.1.0"
 
 repositories {
-    jcenter()
-    maven("https://oss.jfrog.org/artifactory/libs-release")
-    maven("https://repo.spring.io/milestone")
-    maven("https://jitpack.io")
+    mavenLocal() // caching optimization
+    mavenCentral() // everything else
+    maven("https://m2.dv8tion.net/releases") // jda
+    maven("https://jitpack.io") // jda-reactor and slash commands
 }
 
 dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("net.dv8tion:JDA:4.2.0_+")
-    implementation("club.minnced:jda-reactor:1.2.0")
-    implementation("club.minnced:discord-webhooks:0.3.1")
-    implementation("io.projectreactor:reactor-core:3.3.8.RELEASE")
-    implementation("io.projectreactor.kotlin:reactor-kotlin-extensions:1.1.0-M1")
+    implementation("net.dv8tion:JDA:4.3.+") {
+        exclude(module="opus-java")
+    }
+    implementation("com.github.minndevelopment:jda-reactor:77d7fcb")
+    implementation("com.github.minndevelopment:jda-ktx:adf3062")
+    implementation("io.projectreactor:reactor-core:3.3.15.RELEASE")
+    implementation("io.projectreactor.kotlin:reactor-kotlin-extensions:1.1.3")
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.3.7")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.3.7")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.5.0")
 }
 
 val clean by tasks

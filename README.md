@@ -1,6 +1,7 @@
 [live-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/live-event.png
 [update-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/update-event.png
 [vod-event]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/vod-event.png
+[rank-joining]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/rank-joining.gif
 [example-config]: https://github.com/MinnDevelopment/strumbot/blob/master/example-config.json
 
 [ ![docker-pulls](https://img.shields.io/docker/pulls/minnced/strumbot) ](https://hub.docker.com/r/minnced/strumbot)
@@ -20,10 +21,6 @@ A Twitch Stream Notification Bot. This will send notifications to a webhook in y
 The configuration file must be called `config.json` and has to be in the working directory. An example configuration can be found in [`example-config.json`][example-config].
 Anything marked with **(optional)** can be set to `null` to be disabled.
 
-The `timezone` property configures the zone which is used to display the **started at** section of the announcement embed.
-This can parse offsets with the formats described [here](https://docs.oracle.com/javase/8/docs/api/java/time/ZoneId.html#of-java.lang.String-) and [here](https://docs.oracle.com/javase/8/docs/api/java/time/ZoneId.html#SHORT_IDS).
-If this field is omitted, the timezone will be GMT.
-
 ### Discord
 
 This section of the configuration contains settings for the discord side of the bot such as role names and webhook URLs.
@@ -33,17 +30,22 @@ If you don't know how to create a discord bot and get access to the token: [How 
 
 - `token` The discord bot token
 - `stream_notifications` The webhook URL to send stream updates to (see [How to create a webhook](https://github.com/MinnDevelopment/strumbot/blob/master/guides/HOW_TO_CREATE_A_WEBHOOK.md))
-- `message_logs` **(optional)** The webhook URL for message logs (edits/deletes)
 - `role_name` Configuration of `type`->`role` to change the default names of the update roles
 - `enabled_events` Array of events to publish to the `stream_notifications` webhook
+- `logging` Optional webhook URL for errors and warnings printed at runtime (omit or null to disable)
 
-The roles used for updates can be managed by the bot with the `?rank <type>` command.
+The roles used for updates can be managed by the bot with the `/rank role: <type>` command.
 This command will automatically assign the role to the user.
 
-For example, with the configuration `"live": "Stream is Live"` the bot will accept the command `?rank live` and assign/remove the role `Stream is Live` for the user.
-The bot will automatically delete its own message if the invoking message is deleted by the user or an admin.
+For example, with the configuration `"live": "Stream is Live"` the bot will accept the command `/rank role: live` and assign/remove the role `Stream is Live` for the user.
+These commands are *ephemeral*, which means they only show up to the user who invokes them. This way you can use them anywhere without having any clutter in chat!
+
+![rank-joining.gif][rank-joining]
+
 
 #### Events
+
+![vod-event.png][vod-event]
 
 - [`live`][live-event] When the streamer goes live
 - [`update`][update-event] When the streamer changes the current game
@@ -66,8 +68,8 @@ If you don't know how to make a twitch application and access the client_id: [Ho
 {
   "discord": {
     "token": "NjUzMjM1MjY5MzM1NjQ2MjA4.*******.*******",
-    "stream_notifications": "https://discordapp.com/api/webhooks/*******/******",
-    "message_logs": null,
+    "stream_notifications": "https://discord.com/api/webhooks/*******/******",
+    "logging": null,
     "role_name": {
       "live": "live",
       "vod": "vod",

@@ -23,10 +23,13 @@
         </encoder>
     </appender>
 
+    <appender name="WEBHOOK" class="strumbot.WebhookAppender" />
+
 <!--    <logger name="strumbot.TwitchApi" level="trace" />-->
 
     <root level="info">
         <appender-ref ref="STDOUT" />
+        <appender-ref ref="WEBHOOK" />
     </root>
 
 </configuration>

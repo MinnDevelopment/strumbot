@@ -1,9 +1,8 @@
 {
-  "timezone": "PST",
   "discord": {
     "token": "NjUzMjM1MjY5MzM1NjQ2MjA4.*******.*******",
-    "stream_notifications": "https://discordapp.com/api/webhooks/*******/******",
-    "message_logs": "https://discordapp.com/api/webhooks/*******/****** (optional)",
+    "stream_notifications": "https://discord.com/api/webhooks/*******/******",
+    "logging": null,
     "role_name": {
       "live": "live",
       "vod": "vod",

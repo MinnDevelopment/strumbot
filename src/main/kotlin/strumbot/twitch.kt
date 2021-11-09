@@ -16,6 +16,7 @@
 
 package strumbot
 
+import club.minnced.jda.reactor.then
 import club.minnced.jda.reactor.toMono
 import net.dv8tion.jda.api.utils.data.DataArray
 import net.dv8tion.jda.api.utils.data.DataObject
@@ -111,20 +112,23 @@ class TwitchApi(
                 response.use {
                     log.trace("Got response {} for url {}", response.code(), request.url())
                     when {
-                        failed && !response.isSuccessful -> {
+                        failed && !response.isSuccessful -> { // Prevent infinite loop on broken API
                             sink.error(HttpException(response))
                         }
-                        response.code() == 401 -> {
+                        response.code() == 401 -> { // oauth token expires after a few months of uptime
                             log.warn("Authorization expired, refreshing token...")
                             authorize()
-                                .then(makeRequest(request, true, handler))
+                                .then {
+                                    // Update authorization header to new token
+                                    makeRequest(request.newBuilder().authorization().build(), true, handler)
+                                }
                                 .subscribe(sink::success, sink::error, sink::success)
                         }
                         response.code() == 404 -> {
                             log.warn("Received 404 response for request to ${request.url()}")
                             sink.success()
                         }
-                        response.code() == 429 -> {
+                        response.code() == 429 -> { // I have never seen this actually happen
                             log.warn("Hit rate limit, retrying request. Headers:\n{}", response.headers())
                             val reset = response.header("ratelimit-reset")?.let {
                                 it.toLong() - System.currentTimeMillis()
@@ -145,9 +149,11 @@ class TwitchApi(
     private fun newRequest(url: String): Request.Builder {
         return Request.Builder()
             .url(url)
-            .addHeader("Client-ID", clientId)
-            .addHeader("Authorization", "Bearer $accessToken")
+            .header("Client-ID", clientId)
+            .authorization()
     }
+
+    private fun Request.Builder.authorization() = header("Authorization", "Bearer $accessToken")
 
     fun getStreamByLogin(login: Collection<String>): Mono<List<Stream>> = Mono.defer {
         val query = login.asSequence()

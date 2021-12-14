@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("com.github.johnrengelman.shadow") version "5.1.0"
-    kotlin("jvm") version "1.5.10"
+    kotlin("jvm") version "1.6.0"
     application
 }
 
@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "1.1.1"
+version = "1.1.2"
 
 repositories {
     mavenLocal() // caching optimization
@@ -22,16 +22,16 @@ repositories {
 }
 
 dependencies {
-    implementation("ch.qos.logback:logback-classic:1.2.3")
-    implementation("net.dv8tion:JDA:4.3.+") {
+    implementation("ch.qos.logback:logback-classic:1.2.8")
+    implementation("net.dv8tion:JDA:4.+") {
         exclude(module="opus-java")
     }
     implementation("com.github.minndevelopment:jda-reactor:77d7fcb")
-    implementation("com.github.minndevelopment:jda-ktx:adf3062")
+    implementation("com.github.minndevelopment:jda-ktx:34b55c0")
     implementation("io.projectreactor:reactor-core:3.3.15.RELEASE")
     implementation("io.projectreactor.kotlin:reactor-kotlin-extensions:1.1.3")
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.5.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0-RC2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.5.0")
 }
 

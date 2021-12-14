@@ -103,7 +103,8 @@ fun main() {
 
     val watchedStreams = mutableMapOf<String, StreamWatcher>()
     for (userLogin in configuration.twitchUser) {
-        watchedStreams[userLogin] = StreamWatcher(twitch, jda, configuration, userLogin, activityService)
+        val key = userLogin.lowercase(Locale.ROOT) // make sure we don't insert things twice
+        watchedStreams[key] = StreamWatcher(twitch, jda, configuration, userLogin, activityService)
     }
 
     startTwitchService(twitch, watchedStreams, poolScheduler)

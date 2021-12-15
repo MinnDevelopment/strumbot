@@ -81,7 +81,7 @@ fun main() {
         }
     }
 
-    // Create our coroutine scope, this will stop the entire bot if a job fails
+    // Create our coroutine scope
     val context = dispatcher + supervisor + handler
     val scope = CoroutineScope(context)
 
@@ -106,7 +106,7 @@ fun main() {
         setCallbackPool(pool)
         setGatewayPool(pool)
         setRateLimitPool(pool)
-    }.awaitReady()
+    }
 
     configuration.logging?.let {
         WebhookAppender.init(jda, it)
@@ -116,8 +116,9 @@ fun main() {
     val activityService = ActivityService(jda)
     activityService.start()
 
+    // Handle rank command
     setupRankListener(jda, configuration)
-
+    // Wait for cache to finish initializing
     jda.awaitReady()
 
     val watchedStreams = mutableMapOf<String, StreamWatcher>()
@@ -143,7 +144,6 @@ fun main() {
         }
 
         jda.shutdown()
-        twitchJob.cancel()
     }
 
     System.gc()
@@ -177,6 +177,8 @@ private fun CoroutineEventManager.initCommands(configuration: Configuration) {
     listener<GenericGuildEvent> { event ->
         if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
         val guild = event.guild
+
+        if (!filterId(guild, configuration.guildId)) return@listener
 
         guild.upsertCommand("rank", "Add or remove one of the notification roles") {
             option<String>("role", "The role to assign or remove you from", required = true) {

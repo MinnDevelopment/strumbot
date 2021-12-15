@@ -61,7 +61,7 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
             "vod" to getString("vod", "")
         )
     }
-    val events = discord.getArray("enabled_events").asSequence().map(Any::toString).toSet()
+    val events = discord.getArray("enabled_events").map(Any::toString).toSet()
     val userLogin = if (twitch.isType("user_login", DataType.ARRAY))
                         twitch.getArray("user_login").map(Any::toString).toSet()
                     else

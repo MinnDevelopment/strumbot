@@ -17,6 +17,11 @@
 package strumbot
 
 import club.minnced.jda.reactor.on
+import dev.minn.jda.ktx.scope
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.reactive.awaitFirstOrNull
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Guild
@@ -31,6 +36,7 @@ import reactor.util.function.Tuple4
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.coroutines.suspendCoroutine
+import kotlin.time.Duration
 
 operator fun <T> Tuple2<T, *>.component1(): T = t1
 operator fun <T> Tuple2<*, T>.component2(): T = t2
@@ -76,3 +82,13 @@ fun <T> Flux<T>.ignoreFailure(): Flux<T> =
 
 suspend fun <T> Mono<T>.await(): T? = ignoreFailure().awaitFirstOrNull()
 suspend fun <T> Flux<T>.await(): T? = ignoreFailure().awaitFirstOrNull()
+
+inline fun JDA.repeatUntilShutdown(rate: Duration, initDelay: Duration = rate, crossinline task: suspend CoroutineScope.() -> Unit): Job {
+    return scope.launch {
+        delay(initDelay)
+        while (status != JDA.Status.SHUTDOWN) {
+            task()
+            delay(rate)
+        }
+    }
+}

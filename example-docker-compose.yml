@@ -1,0 +1,9 @@
+version: "2.2"
+
+services:
+  strumbot:
+    image: minnced/strumbot:1.1.2
+    volumes:
+      - ./config.json:/etc/strumbot/config.json
+    restart: unless-stopped
+    container_name: strumbot

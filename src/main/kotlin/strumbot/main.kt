@@ -129,6 +129,9 @@ fun main() {
     System.gc()
 }
 
+/**
+ * Creates the roles which are mentioned for webhook notifications
+ */
 private fun CoroutineEventManager.initRoles(configuration: Configuration) {
     listener<GenericGuildEvent> { event ->
         if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
@@ -142,11 +145,14 @@ private fun CoroutineEventManager.initRoles(configuration: Configuration) {
             .map { guild.createRole().setName(it) }
             .forEach {
                 val role = it.await()
-                log.info("Created role ${role.name} in ${guild.name}")
+                log.info("Created role {} in {}", role.name, guild.name)
             }
     }
 }
 
+/**
+ * Creates the relevant commands for role management
+ */
 private fun CoroutineEventManager.initCommands(configuration: Configuration) {
     listener<GenericGuildEvent> { event ->
         if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
@@ -162,22 +168,31 @@ private fun CoroutineEventManager.initCommands(configuration: Configuration) {
     }
 }
 
+/**
+ * Handles the rank command
+ */
 private fun setupRankListener(jda: JDA, configuration: Configuration) {
     jda.listener<SlashCommandEvent>(timeout = 1.minutes) { event ->
         if (event.name != "rank") return@listener
 
         val guild = event.guild ?: return@listener
+        val member = event.member ?: return@listener
+
+        // Get the role instance for the requested rank
         val type = event.getOption("role")?.asString ?: ""
         val role = guild.getRoleById(jda.getRoleByType(configuration, type)) ?: return@listener
-        val member = event.member ?: return@listener
+
         event.deferReply(true).queue() // This is required to handle delayed response
-        event.hook.setEphemeral(true)
+        event.hook.setEphemeral(true) // Make messages only visible to command user
 
         try {
             val added = toggleRole(member, role)
             event.hook.sendMessage(if (added) "Added the role" else "Removed the role").await()
         } catch (ex: PermissionException) {
+            // If there is a permission issue, handle it by telling the user about the problem
             event.hook.sendMessage(handlePermissionError(ex, role)).await()
+            log.error("Failed to add or remove role for a member. Member: {} ({}) Role: {} ({})",
+                      member.user.asTag, member.id, role.name, role.id, ex)
         }
     }
 }
@@ -186,11 +201,11 @@ private suspend fun toggleRole(
     member: Member,
     role: Role
 ) = if (role in member.roles) {
-    log.debug("Removing ${role.name} from ${member.user.asTag}")
+    log.debug("Removing {} from {}", role.name, member.user.asTag)
     role.guild.removeRoleFromMember(member, role).await()
     false
 } else {
-    log.debug("Adding ${role.name} to ${member.user.asTag}")
+    log.debug("Adding {} to {}", role.name, member.user.asTag)
     role.guild.addRoleToMember(member, role).await()
     true
 }

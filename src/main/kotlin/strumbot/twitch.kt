@@ -16,39 +16,38 @@
 
 package strumbot
 
-import club.minnced.jda.reactor.then
 import club.minnced.jda.reactor.toMono
+import dev.minn.jda.ktx.SLF4J
+import kotlinx.coroutines.*
 import net.dv8tion.jda.api.utils.data.DataArray
 import net.dv8tion.jda.api.utils.data.DataObject
 import okhttp3.*
 import org.slf4j.Logger
-import org.slf4j.LoggerFactory
 import reactor.core.publisher.Mono
-import reactor.core.scheduler.Scheduler
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
-import java.time.Duration
 import java.time.Instant
-import java.time.ZoneId
 import java.time.ZonedDateTime
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
-class HttpException(route: String, status: Int, meaning: String)
-    : Exception("$route > $status: $meaning") {
-    constructor(response: Response): this(response.request().url().toString(), response.code(), response.message())
-}
+class HttpException(
+    route: String, status: Int, meaning: String
+): Exception("$route > $status: $meaning")
 
-private val emptyFormBody = RequestBody.create(MediaType.parse("form-data"), "")
-
-fun createTwitchApi(http: OkHttpClient, scheduler: Scheduler, clientId: String, clientSecret: String): Mono<TwitchApi> = Mono.defer {
-    val api = TwitchApi(http, scheduler, clientId, clientSecret, "N/A")
-    api.authorize().thenReturn(api)
-}
-
-class NotAuthorizedError(
+class NotAuthorized(
     response: Response
-): Error("Authorization failed. Code: ${response.code()} Body: ${response.body()!!.string()}")
+): Exception("Authorization failed. Code: ${response.code()} Body: ${response.body()!!.string()}")
+
+fun Response.asException() = HttpException(request().url().toString(), code(), message())
+
+suspend fun createTwitchApi(http: OkHttpClient, clientId: String, clientSecret: String, scope: CoroutineScope): TwitchApi {
+    val api = TwitchApi(http, clientId, clientSecret, "N/A", scope)
+    api.authorize()
+    return api
+}
 
 inline fun post(url: String, form: FormBody.Builder.() -> Unit): Request {
     val body = FormBody.Builder()
@@ -61,72 +60,72 @@ inline fun post(url: String, form: FormBody.Builder.() -> Unit): Request {
 
 class TwitchApi(
     private val http: OkHttpClient,
-    private val scheduler: Scheduler,
     private val clientId: String,
     private val clientSecret: String,
-    private var accessToken: String) {
+    private var accessToken: String,
+    private val scope: CoroutineScope
+) {
 
-    companion object {
-        private val log: Logger = LoggerFactory.getLogger(TwitchApi::class.java)
-    }
-
+    private val log: Logger by SLF4J
     private val warnedMissingVod = mutableSetOf<String>()
     private val games = FixedSizeMap<String, Game>(10)
 
-    internal fun authorize(): Mono<Unit> = Mono.create { sink ->
+    internal suspend fun authorize() = suspendCancellableCoroutine<Unit> { sink ->
         val request = post("https://id.twitch.tv/oauth2/token") {
             add("client_id", clientId)
             add("client_secret", clientSecret)
             add("grant_type", "client_credentials")
         }
 
-        http.newCall(request).enqueue(object : Callback {
+        val call = http.newCall(request)
+        sink.invokeOnCancellation { call.cancel() }
+
+        call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                sink.error(e)
+                sink.resumeWithException(e)
             }
 
             override fun onResponse(call: Call, response: Response) {
-                response.use {
+                response.useCatching {
                     when {
                         response.isSuccessful -> {
                             val json = DataObject.fromJson(response.body()!!.byteStream())
                             accessToken = json.getString("access_token")
-                            sink.success()
                         }
-                        response.code() < 500 -> sink.error(NotAuthorizedError(response))
-                        else -> sink.error(HttpException(response))
+                        response.code() < 500 -> throw NotAuthorized(response)
+                        else -> throw response.asException()
                     }
-                }
+                }.also(sink::resumeWith)
             }
         })
     }
 
-    private fun <T> makeRequest(request: Request, failed: Boolean = false, handler: (Response) -> T?): Mono<T> = Mono.create<T> { sink ->
+    private suspend fun <T> makeRequest(request: Request, failed: Boolean = false, handler: (Response) -> T?) = suspendCancellableCoroutine<T?> { sink ->
         log.trace("Making request to {}", request.url())
-        http.newCall(request).enqueue(object : Callback {
+        val call = http.newCall(request)
+        sink.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
             override fun onFailure(call: Call, e: IOException) {
-                sink.error(e)
+                sink.resumeWithException(e)
             }
 
-            override fun onResponse(call: Call, response: Response) {
-                response.use {
+            override fun onResponse(call: Call, response: Response) = scope.launch {
+                response.useCatching {
                     log.trace("Got response {} for url {}", response.code(), request.url())
                     when {
                         failed && !response.isSuccessful -> { // Prevent infinite loop on broken API
-                            sink.error(HttpException(response))
+                            throw response.asException()
                         }
                         response.code() == 401 -> { // oauth token expires after a few months of uptime
                             log.warn("Authorization expired, refreshing token...")
                             authorize()
-                                .then {
-                                    // Update authorization header to new token
-                                    makeRequest(request.newBuilder().authorization().build(), true, handler)
-                                }
-                                .subscribe(sink::success, sink::error, sink::success)
+                            // Update authorization header to new token
+                            val newRequest = request.newBuilder().authorization().build()
+                            retryRequest(newRequest)?.let(handler)
                         }
                         response.code() == 404 -> {
                             log.warn("Received 404 response for request to ${request.url()}")
-                            sink.success()
+                            null
                         }
                         response.code() == 429 -> { // I have never seen this actually happen
                             log.warn("Hit rate limit, retrying request. Headers:\n{}", response.headers())
@@ -134,17 +133,20 @@ class TwitchApi(
                                 it.toLong() - System.currentTimeMillis()
                             } ?: 1000
 
-                            Mono.delay(Duration.ofMillis(reset))
-                                .then(makeRequest(request, true, handler))
-                                .subscribe(sink::success, sink::error, sink::success)
+                            delay(reset)
+                            retryRequest(request)?.let(handler)
                         }
-                        response.isSuccessful -> sink.success(handler(response))
-                        else -> sink.error(HttpException(response))
+                        response.isSuccessful -> handler(response)
+                        else -> throw response.asException()
                     }
-                }
-            }
+                }.also(sink::resumeWith)
+            }.run {}
         })
-    }.publishOn(scheduler)
+    }
+
+    private suspend fun retryRequest(request: Request): Response? {
+        return makeRequest(request.newBuilder().authorization().build(), true) { it }
+    }
 
     private fun newRequest(url: String): Request.Builder {
         return Request.Builder()
@@ -155,7 +157,7 @@ class TwitchApi(
 
     private fun Request.Builder.authorization() = header("Authorization", "Bearer $accessToken")
 
-    fun getStreamByLogin(login: Collection<String>): Mono<List<Stream>> = Mono.defer {
+    fun getStreamByLogin(login: Collection<String>) = scope.defer {
         val query = login.asSequence()
             .map { "user_login=$it" }
             .joinToString("&")
@@ -184,7 +186,7 @@ class TwitchApi(
         }
     }
 
-    fun getGame(stream: Stream): Mono<Game> = Mono.defer {
+    fun getGame(stream: Stream) = scope.defer {
         if (stream.gameId.isEmpty()) {
             return@defer EMPTY_GAME.toMono()
         }
@@ -210,7 +212,7 @@ class TwitchApi(
         }
     }
 
-    fun getUserIdByLogin(login: String): Mono<String> = Mono.defer {
+    fun getUserIdByLogin(login: String) = scope.defer {
         val request = newRequest("https://api.twitch.tv/helix/users?login=$login").build()
 
         makeRequest(request) { response ->
@@ -222,7 +224,7 @@ class TwitchApi(
         }
     }
 
-    fun getVideoById(id: String, type: String? = "archive"): Mono<Video> = Mono.defer {
+    fun getVideoById(id: String, type: String? = "archive") = scope.defer {
         val url = "https://api.twitch.tv/helix/videos?id=$id" + if (type != null) "&type=$type" else ""
         val request = newRequest(url).build()
 
@@ -231,7 +233,7 @@ class TwitchApi(
         }
     }
 
-    fun getVideoByStream(stream: Stream): Mono<Video> = Mono.defer {
+    fun getVideoByStream(stream: Stream) = scope.defer {
         val userId = stream.userId
         val request = newRequest(
             "https://api.twitch.tv/helix/videos" +
@@ -258,7 +260,7 @@ class TwitchApi(
         }
     }
 
-    fun getTopClips(userId: String, startedAt: Long, num: Int = 5): Mono<List<Video>> {
+    fun getTopClips(userId: String, startedAt: Long, num: Int = 5) = scope.defer {
         val request = newRequest(
             "https://api.twitch.tv/helix/clips" +
                 "?broadcaster_id=$userId" +
@@ -266,7 +268,7 @@ class TwitchApi(
                 "&started_at=${Instant.ofEpochSecond(startedAt)}"
         ).build()
 
-        return makeRequest(request) { response ->
+        makeRequest(request) { response ->
             val data = body(response)
             if (data.length() == 0)
                 emptyList()
@@ -278,9 +280,9 @@ class TwitchApi(
         }
     }
 
-    fun getThumbnail(stream: Stream, width: Int = 1920, height: Int = 1080): Mono<InputStream> = getThumbnail(stream.thumbnail, width, height)
-    fun getThumbnail(video: Video, width: Int = 1920, height: Int = 1080): Mono<InputStream> = getThumbnail(video.thumbnail, width, height)
-    fun getThumbnail(url: String, width: Int, height: Int): Mono<InputStream> = Mono.defer<InputStream> {
+    fun getThumbnail(stream: Stream, width: Int = 1920, height: Int = 1080) = getThumbnail(stream.thumbnail, width, height)
+    fun getThumbnail(video: Video, width: Int = 1920, height: Int = 1080) = getThumbnail(video.thumbnail, width, height)
+    fun getThumbnail(url: String, width: Int, height: Int) = scope.defer<InputStream?> {
         // Stream url uses {width} and video url uses %{width} ??????????????? OK TWITCH ???????????
         val thumbnailUrl = url.replace(Regex("%?\\{width}"), width.toString())
                               .replace(Regex("%?\\{height}"), height.toString()) + "?v=${System.currentTimeMillis()}" // add random number to avoid cache!
@@ -288,14 +290,16 @@ class TwitchApi(
             .url(thumbnailUrl)
             .build()
 
-        makeRequest(request) { response ->
-            val buffer = ByteArrayOutputStream()
-            response.body()!!.byteStream().copyTo(buffer)
-            ByteArrayInputStream(buffer.toByteArray())
+        try {
+            makeRequest(request) { response ->
+                val buffer = ByteArrayOutputStream()
+                response.body()!!.byteStream().copyTo(buffer)
+                ByteArrayInputStream(buffer.toByteArray())
+            }
+        } catch (ex: Exception) {
+            log.error("Failed to download thumbnail with url '{}'", url, ex)
+            null
         }
-    }.onErrorResume {
-        log.error("Failed to download thumbnail with url '{}'", url, it)
-        Mono.empty()
     }
 
     private fun handleVideo(response: Response): Video? {

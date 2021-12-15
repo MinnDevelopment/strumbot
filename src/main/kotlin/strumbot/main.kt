@@ -28,6 +28,7 @@ import dev.minn.jda.ktx.interactions.option
 import dev.minn.jda.ktx.interactions.upsertCommand
 import dev.minn.jda.ktx.light
 import dev.minn.jda.ktx.listener
+import kotlinx.coroutines.runBlocking
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.JDABuilder
 import net.dv8tion.jda.api.entities.Member
@@ -72,8 +73,6 @@ private val pool = Executors.newScheduledThreadPool(getThreadCount()) {
     thread(start=false, name="Worker-Thread", isDaemon=true, block=it::run)
 }
 
-private val poolScheduler = Schedulers.fromExecutor(pool)
-
 fun main() {
     AllowedMentions.setDefaultMentions(EnumSet.of(Message.MentionType.ROLE))
 
@@ -82,16 +81,16 @@ fun main() {
         .connectionPool(ConnectionPool(2, 20, TimeUnit.SECONDS))
         .build()
 
-    log.info("Initializing twitch api")
-    val twitch = createTwitchApi(
-        okhttp, poolScheduler,
-        configuration.twitchClientId, configuration.twitchClientSecret
-    ).block()!!
-
-    log.info("Initializing discord connection")
     val manager = CoroutineEventManager()
     manager.initCommands(configuration)
     manager.initRoles(configuration)
+
+    log.info("Initializing twitch api")
+    val twitch: TwitchApi = runBlocking {
+        createTwitchApi(okhttp, configuration.twitchClientId, configuration.twitchClientSecret, manager)
+    }
+
+    log.info("Initializing discord connection")
 
     val jda = light(configuration.token, enableCoroutines=false, timeout=1.minutes) {
         setEventManager(manager)
@@ -119,13 +118,7 @@ fun main() {
         watchedStreams[key] = StreamWatcher(twitch, jda, configuration, userLogin, activityService)
     }
 
-    startTwitchService(twitch, watchedStreams, poolScheduler)
-        .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMinutes(1)).transientErrors(true))
-        .doFinally {
-            log.warn("Twitch service terminated unexpectedly with signal {}", it)
-            jda.shutdownNow()
-        }.subscribe()
-
+    startTwitchService(twitch, jda, watchedStreams)
     System.gc()
 }
 

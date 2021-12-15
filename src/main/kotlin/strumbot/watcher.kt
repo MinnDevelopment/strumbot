@@ -52,6 +52,8 @@ import strumbot.component1
 import strumbot.component2
 import strumbot.component3
 import strumbot.component4
+import java.util.concurrent.CancellationException
+import kotlin.time.Duration.Companion.seconds
 
 private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
 const val OFFLINE_DELAY = 2L * 60L // 2 minutes
@@ -67,9 +69,9 @@ fun suppressExpected(t: Throwable) = !Exceptions.isOverflow(t) && t::class.java 
 
 fun startTwitchService(
     twitch: TwitchApi,
-    watchedStreams: Map<String, StreamWatcher>,
-    poolScheduler: Scheduler
-): Flux<*> {
+    jda: JDA,
+    watchedStreams: Map<String, StreamWatcher>
+) {
     log.info("Listening for stream(s) from {}",
         if (watchedStreams.size == 1)
             watchedStreams.keys.first()
@@ -77,18 +79,25 @@ fun startTwitchService(
             watchedStreams.keys.toString()
     )
 
-    return Flux.interval(Duration.ZERO, Duration.ofSeconds(30), poolScheduler)
-        .flatMap { twitch.getStreamByLogin(watchedStreams.keys) }
-        .flatMapSequential { streams ->
-            Flux.merge(watchedStreams.map { entry ->
+    jda.repeatUntilShutdown(30.seconds) {
+        try {
+            val streams = twitch.getStreamByLogin(watchedStreams.keys).await() ?: return@repeatUntilShutdown
+            for (entry in watchedStreams) {
                 val (name, watcher) = entry
                 val stream = streams.find { it.userLogin.equals(name, true) }
-                watcher.handle(stream)
-            })
+                watcher.handle(stream).await()
+            }
+        } catch (ex: Exception) {
+            if (!suppressExpected(ex))
+                log.error("Error in twitch stream service", ex)
+            // Authorization errors should cancel our process
+            if (ex is NotAuthorized)
+                throw ex
         }
-        .doOnError(::suppressExpected) { log.error("Error in twitch stream service", it) }
-        .retryWhen(Retry.indefinitely().filter { it !is Error && it !is HttpException })
-        .retryWhen(Retry.backoff(2, Duration.ofSeconds(30)).transientErrors(true))
+    }.invokeOnCompletion {
+        if (it != null && it !is CancellationException)
+            jda.shutdown()
+    }
 }
 
 data class Timestamps(val display: String, val twitchFormat: String) {

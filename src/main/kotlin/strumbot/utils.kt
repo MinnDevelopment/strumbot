@@ -17,14 +17,12 @@
 package strumbot
 
 import dev.minn.jda.ktx.scope
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Guild
-import okhttp3.Call
-import okhttp3.Callback
-import okhttp3.Response
-import java.io.IOException
-import kotlin.coroutines.resumeWithException
 import kotlin.time.Duration
 
 // Convert role type to role id

@@ -29,7 +29,6 @@ import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Member
 import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.Role
-import net.dv8tion.jda.api.events.ReadyEvent
 import net.dv8tion.jda.api.events.ShutdownEvent
 import net.dv8tion.jda.api.events.guild.GenericGuildEvent
 import net.dv8tion.jda.api.events.guild.GuildJoinEvent

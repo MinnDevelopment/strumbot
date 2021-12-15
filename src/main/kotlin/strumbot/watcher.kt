@@ -17,7 +17,10 @@
 package strumbot
 
 import dev.minn.jda.ktx.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Activity
 import net.dv8tion.jda.api.entities.WebhookClient
@@ -32,7 +35,6 @@ import java.net.UnknownHostException
 import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.*
-import java.util.concurrent.CancellationException
 import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.seconds
 

@@ -17,18 +17,21 @@
 package strumbot
 
 import dev.minn.jda.ktx.SLF4J
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import net.dv8tion.jda.api.utils.data.DataArray
 import net.dv8tion.jda.api.utils.data.DataObject
-import okhttp3.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
 import org.slf4j.Logger
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.io.IOException
 import java.io.InputStream
 import java.time.Instant
 import java.time.ZonedDateTime
-import kotlin.coroutines.resumeWithException
 
 suspend fun createTwitchApi(http: OkHttpClient, clientId: String, clientSecret: String, scope: CoroutineScope): TwitchApi {
     val api = TwitchApi(http, clientId, clientSecret, "N/A", scope)

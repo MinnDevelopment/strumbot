@@ -68,11 +68,19 @@ fun main() {
         .connectionPool(ConnectionPool(2, 20, TimeUnit.SECONDS))
         .build()
 
-    // Create our coroutine scope, this will stop the entire bot if a job fails
+    // Use the global thread pool for coroutine dispatches
     val dispatcher = pool.asCoroutineDispatcher()
     // Using a SupervisorJob allows coroutines to fail without cancelling all other jobs
     val supervisor = SupervisorJob()
-    val scope = CoroutineScope(dispatcher + supervisor)
+    // Implement a logging exception handler for uncaught throws in launched jobs
+    val handler = CoroutineExceptionHandler { _, throwable ->
+        if (throwable !is CancellationException)
+            log.error("Uncaught exception in coroutine", throwable)
+    }
+
+    // Create our coroutine scope, this will stop the entire bot if a job fails
+    val context = dispatcher + supervisor + handler
+    val scope = CoroutineScope(context)
 
     // Create a coroutine manager with this scope
     val manager = CoroutineEventManager(scope)

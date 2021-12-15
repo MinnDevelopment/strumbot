@@ -26,7 +26,6 @@ import net.dv8tion.jda.api.requests.RestAction
 import net.dv8tion.jda.api.utils.MarkdownUtil.maskedLink
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import reactor.core.Exceptions
 import java.io.InputStream
 import java.net.SocketException
 import java.net.SocketTimeoutException
@@ -48,7 +47,7 @@ private val ignoredErrors = setOf<Class<*>>(
     UnknownHostException::class.java          // DNS errors
 )
 
-fun suppressExpected(t: Throwable) = !Exceptions.isOverflow(t) && t::class.java !in ignoredErrors
+fun suppressExpected(t: Throwable) = t::class.java !in ignoredErrors
 
 fun startTwitchService(
     twitch: TwitchApi,
@@ -65,8 +64,8 @@ fun startTwitchService(
     jda.repeatUntilShutdown(30.seconds, ZERO) {
         try {
             val streams = twitch.getStreamByLogin(watchedStreams.keys).await() ?: return@repeatUntilShutdown
-            for (entry in watchedStreams) {
-                val (name, watcher) = entry
+
+            watchedStreams.forEach { (name, watcher) ->
                 val stream = streams.find { it.userLogin.equals(name, true) }
                 watcher.handle(stream).await()
             }

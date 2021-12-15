@@ -26,7 +26,6 @@ dependencies {
     implementation("net.dv8tion:JDA:4.+") {
         exclude(module="opus-java")
     }
-    implementation("com.github.minndevelopment:jda-reactor:77d7fcb")
     implementation("com.github.minndevelopment:jda-ktx:34b55c0")
     implementation(kotlin("stdlib-jdk8"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0-RC2")

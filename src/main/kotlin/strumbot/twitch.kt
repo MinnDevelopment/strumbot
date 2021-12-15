@@ -185,25 +185,23 @@ class TwitchApi(
 
     fun getGame(stream: Stream): Deferred<Game?> = scope.defer {
         if (stream.gameId.isEmpty()) {
-            return@defer EMPTY_GAME
-        }
-        if (stream.gameId in games) {
-            return@defer games[stream.gameId]
-        }
-
-        val request = newRequest("https://api.twitch.tv/helix/games?id=${stream.gameId}").build()
-
-        return@defer makeRequest(request) { response ->
-            val data = body(response)
-            if (data.isEmpty) {
-                EMPTY_GAME
-            } else {
-                val game = data.getObject(0)
-                games.computeIfAbsent(stream.gameId) {
-                    Game(
-                        game.getString("id"),
-                        game.getString("name")
-                    )
+            EMPTY_GAME
+        } else if (stream.gameId in games) {
+            games[stream.gameId]
+        } else {
+            val request = newRequest("https://api.twitch.tv/helix/games?id=${stream.gameId}").build()
+            makeRequest(request) { response ->
+                val data = body(response)
+                if (data.isEmpty) {
+                    EMPTY_GAME
+                } else {
+                    val game = data.getObject(0)
+                    games.computeIfAbsent(stream.gameId) {
+                        Game(
+                            game.getString("id"),
+                            game.getString("name")
+                        )
+                    }
                 }
             }
         }
@@ -211,7 +209,6 @@ class TwitchApi(
 
     fun getUserIdByLogin(login: String) = scope.defer {
         val request = newRequest("https://api.twitch.tv/helix/users?login=$login").build()
-
         makeRequest(request) { response ->
             val data = body(response)
             if (data.isEmpty)
@@ -223,8 +220,8 @@ class TwitchApi(
 
     fun getVideoById(id: String, type: String? = "archive") = scope.defer {
         val url = "https://api.twitch.tv/helix/videos?id=$id" + if (type != null) "&type=$type" else ""
-        val request = newRequest(url).build()
 
+        val request = newRequest(url).build()
         makeRequest(request) { response ->
             handleVideo(response)
         }

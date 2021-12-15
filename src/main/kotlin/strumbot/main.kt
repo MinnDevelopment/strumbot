@@ -24,11 +24,13 @@ import dev.minn.jda.ktx.interactions.option
 import dev.minn.jda.ktx.interactions.upsertCommand
 import dev.minn.jda.ktx.light
 import dev.minn.jda.ktx.listener
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Member
 import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.Role
+import net.dv8tion.jda.api.events.ReadyEvent
+import net.dv8tion.jda.api.events.ShutdownEvent
 import net.dv8tion.jda.api.events.guild.GenericGuildEvent
 import net.dv8tion.jda.api.events.guild.GuildJoinEvent
 import net.dv8tion.jda.api.events.guild.GuildReadyEvent
@@ -43,6 +45,7 @@ import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.lang.Integer.max
 import java.util.*
+import java.util.concurrent.CancellationException
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.TimeUnit
@@ -65,17 +68,27 @@ fun main() {
         .connectionPool(ConnectionPool(2, 20, TimeUnit.SECONDS))
         .build()
 
-    val manager = CoroutineEventManager()
+    // Create our coroutine scope, this will stop the entire bot if a job fails
+    val dispatcher = pool.asCoroutineDispatcher()
+    // Using a SupervisorJob allows coroutines to fail without cancelling all other jobs
+    val supervisor = SupervisorJob()
+    val scope = CoroutineScope(dispatcher + supervisor)
+
+    // Create a coroutine manager with this scope
+    val manager = CoroutineEventManager(scope)
     manager.initCommands(configuration)
     manager.initRoles(configuration)
 
+    manager.listener<ShutdownEvent> {
+        supervisor.cancel()
+    }
+
     log.info("Initializing twitch api")
     val twitch: TwitchApi = runBlocking {
-        createTwitchApi(okhttp, configuration.twitchClientId, configuration.twitchClientSecret, manager)
+        createTwitchApi(okhttp, configuration.twitchClientId, configuration.twitchClientSecret, scope)
     }
 
     log.info("Initializing discord connection")
-
     val jda = light(configuration.token, enableCoroutines=false, timeout=1.minutes) {
         setEventManager(manager)
         setHttpClient(okhttp)
@@ -102,7 +115,26 @@ fun main() {
         watchedStreams[key] = StreamWatcher(twitch, jda, configuration, userLogin, activityService)
     }
 
-    startTwitchService(twitch, jda, watchedStreams)
+    val twitchJob = startTwitchService(twitch, jda, watchedStreams)
+
+    twitchJob.invokeOnCompletion {
+        if (it != null && it !is CancellationException) {
+            log.error("Twitch service terminated unexpectedly", it)
+            supervisor.cancel()
+        }
+    }
+
+    supervisor.invokeOnCompletion {
+        if (it != null && it !is CancellationException) {
+            log.error("Supervisor failed with unexpected error", it)
+        } else {
+            log.info("Shutting down")
+        }
+
+        jda.shutdown()
+        twitchJob.cancel()
+    }
+
     System.gc()
 }
 

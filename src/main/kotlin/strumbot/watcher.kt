@@ -18,6 +18,7 @@ package strumbot
 
 import dev.minn.jda.ktx.*
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Activity
@@ -53,7 +54,7 @@ fun startTwitchService(
     twitch: TwitchApi,
     jda: JDA,
     watchedStreams: Map<String, StreamWatcher>
-) {
+): Job {
     log.info("Listening for stream(s) from {}",
         if (watchedStreams.size == 1)
             watchedStreams.keys.first()
@@ -61,7 +62,7 @@ fun startTwitchService(
             watchedStreams.keys.toString()
     )
 
-    jda.repeatUntilShutdown(30.seconds, ZERO) {
+    return jda.repeatUntilShutdown(30.seconds, ZERO) {
         try {
             val streams = twitch.getStreamByLogin(watchedStreams.keys).await() ?: return@repeatUntilShutdown
 
@@ -70,15 +71,12 @@ fun startTwitchService(
                 watcher.handle(stream).await()
             }
         } catch (ex: Exception) {
-            if (!suppressExpected(ex))
+            if (suppressExpected(ex))
                 log.error("Error in twitch stream service", ex)
             // Authorization errors should cancel our process
             if (ex is NotAuthorized)
                 throw ex
         }
-    }.invokeOnCompletion {
-        if (it != null && it !is CancellationException)
-            jda.shutdown()
     }
 }
 

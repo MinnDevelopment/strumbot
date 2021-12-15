@@ -28,11 +28,8 @@ dependencies {
     }
     implementation("com.github.minndevelopment:jda-reactor:77d7fcb")
     implementation("com.github.minndevelopment:jda-ktx:34b55c0")
-    implementation("io.projectreactor:reactor-core:3.3.15.RELEASE")
-    implementation("io.projectreactor.kotlin:reactor-kotlin-extensions:1.1.3")
     implementation(kotlin("stdlib-jdk8"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0-RC2")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.5.0")
 }
 
 val clean by tasks

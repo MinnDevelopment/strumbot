@@ -17,10 +17,6 @@
 @file:JvmName("Main")
 package strumbot
 
-import club.minnced.jda.reactor.ReactiveEventManager
-import club.minnced.jda.reactor.asMono
-import club.minnced.jda.reactor.createManager
-import club.minnced.jda.reactor.on
 import dev.minn.jda.ktx.CoroutineEventManager
 import dev.minn.jda.ktx.await
 import dev.minn.jda.ktx.interactions.choice
@@ -30,7 +26,6 @@ import dev.minn.jda.ktx.light
 import dev.minn.jda.ktx.listener
 import kotlinx.coroutines.runBlocking
 import net.dv8tion.jda.api.JDA
-import net.dv8tion.jda.api.JDABuilder
 import net.dv8tion.jda.api.entities.Member
 import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.Role
@@ -41,23 +36,12 @@ import net.dv8tion.jda.api.events.interaction.SlashCommandEvent
 import net.dv8tion.jda.api.exceptions.HierarchyException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
-import net.dv8tion.jda.api.interactions.commands.OptionType
-import net.dv8tion.jda.api.interactions.commands.build.OptionData
-import net.dv8tion.jda.api.requests.GatewayIntent
-import net.dv8tion.jda.api.requests.RestAction
-import net.dv8tion.jda.api.requests.restaction.RoleAction
 import net.dv8tion.jda.api.utils.AllowedMentions
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
-import reactor.core.scheduler.Schedulers
-import reactor.kotlin.core.publisher.toFlux
-import reactor.util.retry.Retry
 import java.lang.Integer.max
-import java.time.Duration
 import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool

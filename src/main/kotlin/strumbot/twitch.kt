@@ -16,21 +16,18 @@
 
 package strumbot
 
-import club.minnced.jda.reactor.toMono
 import dev.minn.jda.ktx.SLF4J
 import kotlinx.coroutines.*
 import net.dv8tion.jda.api.utils.data.DataArray
 import net.dv8tion.jda.api.utils.data.DataObject
 import okhttp3.*
 import org.slf4j.Logger
-import reactor.core.publisher.Mono
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.time.Instant
 import java.time.ZonedDateTime
-import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 class HttpException(
@@ -186,17 +183,17 @@ class TwitchApi(
         }
     }
 
-    fun getGame(stream: Stream) = scope.defer {
+    fun getGame(stream: Stream): Deferred<Game?> = scope.defer {
         if (stream.gameId.isEmpty()) {
-            return@defer EMPTY_GAME.toMono()
+            return@defer EMPTY_GAME
         }
         if (stream.gameId in games) {
-            return@defer games[stream.gameId].toMono()
+            return@defer games[stream.gameId]
         }
 
         val request = newRequest("https://api.twitch.tv/helix/games?id=${stream.gameId}").build()
 
-        makeRequest(request) { response ->
+        return@defer makeRequest(request) { response ->
             val data = body(response)
             if (data.isEmpty) {
                 EMPTY_GAME

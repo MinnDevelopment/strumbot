@@ -35,6 +35,7 @@ import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.*
 import java.util.concurrent.CancellationException
+import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.seconds
 
 private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
@@ -61,7 +62,7 @@ fun startTwitchService(
             watchedStreams.keys.toString()
     )
 
-    jda.repeatUntilShutdown(30.seconds) {
+    jda.repeatUntilShutdown(30.seconds, ZERO) {
         try {
             val streams = twitch.getStreamByLogin(watchedStreams.keys).await() ?: return@repeatUntilShutdown
             for (entry in watchedStreams) {

@@ -82,7 +82,7 @@ fun main() {
         setCallbackPool(pool)
         setGatewayPool(pool)
         setRateLimitPool(pool)
-    }
+    }.awaitReady()
 
     configuration.logging?.let {
         WebhookAppender.init(jda, it)

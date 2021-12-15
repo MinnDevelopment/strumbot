@@ -16,13 +16,10 @@
 
 package strumbot
 
-import club.minnced.jda.reactor.on
 import dev.minn.jda.ktx.scope
 import kotlinx.coroutines.*
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Guild
-import net.dv8tion.jda.api.events.interaction.SlashCommandEvent
-import reactor.core.publisher.Flux
 import kotlin.time.Duration
 
 // Convert role type to role id
@@ -41,8 +38,6 @@ fun JDA.getRoleByType(configuration: Configuration, type: String): String {
     }
     return rankByType[type] ?: "0"
 }
-
-fun JDA.onCommand(name: String): Flux<SlashCommandEvent> = on<SlashCommandEvent>().filter { it.name == name }
 
 inline fun JDA.repeatUntilShutdown(rate: Duration, initDelay: Duration = rate, crossinline task: suspend CoroutineScope.() -> Unit): Job {
     return scope.launch {

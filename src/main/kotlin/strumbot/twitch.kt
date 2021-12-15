@@ -154,7 +154,7 @@ class TwitchApi(
 
     private fun Request.Builder.authorization() = header("Authorization", "Bearer $accessToken")
 
-    fun getStreamByLogin(login: Collection<String>) = scope.defer {
+    fun getStreamByLogin(login: Collection<String>) = scope.async {
         val query = login.asSequence()
             .map { "user_login=$it" }
             .joinToString("&")
@@ -183,7 +183,7 @@ class TwitchApi(
         }
     }
 
-    fun getGame(stream: Stream): Deferred<Game?> = scope.defer {
+    fun getGame(stream: Stream): Deferred<Game?> = scope.async {
         if (stream.gameId.isEmpty()) {
             EMPTY_GAME
         } else if (stream.gameId in games) {
@@ -207,7 +207,7 @@ class TwitchApi(
         }
     }
 
-    fun getUserIdByLogin(login: String) = scope.defer {
+    fun getUserIdByLogin(login: String) = scope.async {
         val request = newRequest("https://api.twitch.tv/helix/users?login=$login").build()
         makeRequest(request) { response ->
             val data = body(response)
@@ -218,7 +218,7 @@ class TwitchApi(
         }
     }
 
-    fun getVideoById(id: String, type: String? = "archive") = scope.defer {
+    fun getVideoById(id: String, type: String? = "archive") = scope.async {
         val url = "https://api.twitch.tv/helix/videos?id=$id" + if (type != null) "&type=$type" else ""
 
         val request = newRequest(url).build()
@@ -227,7 +227,7 @@ class TwitchApi(
         }
     }
 
-    fun getVideoByStream(stream: Stream) = scope.defer {
+    fun getVideoByStream(stream: Stream) = scope.async {
         val userId = stream.userId
         val request = newRequest(
             "https://api.twitch.tv/helix/videos" +
@@ -254,7 +254,7 @@ class TwitchApi(
         }
     }
 
-    fun getTopClips(userId: String, startedAt: Long, num: Int = 5) = scope.defer {
+    fun getTopClips(userId: String, startedAt: Long, num: Int = 5) = scope.async {
         val request = newRequest(
             "https://api.twitch.tv/helix/clips" +
                 "?broadcaster_id=$userId" +
@@ -276,7 +276,7 @@ class TwitchApi(
 
     fun getThumbnail(stream: Stream, width: Int = 1920, height: Int = 1080) = getThumbnail(stream.thumbnail, width, height)
     fun getThumbnail(video: Video, width: Int = 1920, height: Int = 1080) = getThumbnail(video.thumbnail, width, height)
-    fun getThumbnail(url: String, width: Int, height: Int) = scope.defer<InputStream?> {
+    fun getThumbnail(url: String, width: Int, height: Int) = scope.async<InputStream?> {
         // Stream url uses {width} and video url uses %{width} ??????????????? OK TWITCH ???????????
         val thumbnailUrl = url.replace(Regex("%?\\{width}"), width.toString())
                               .replace(Regex("%?\\{height}"), height.toString()) + "?v=${System.currentTimeMillis()}" // add random number to avoid cache!

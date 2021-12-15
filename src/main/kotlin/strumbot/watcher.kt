@@ -17,9 +17,7 @@
 package strumbot
 
 import dev.minn.jda.ktx.*
-import kotlinx.coroutines.Deferred
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
+import kotlinx.coroutines.*
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Activity
 import net.dv8tion.jda.api.entities.WebhookClient
@@ -66,10 +64,14 @@ fun startTwitchService(
         try {
             val streams = twitch.getStreamByLogin(watchedStreams.keys).await() ?: return@repeatUntilShutdown
 
-            watchedStreams.forEach { (name, watcher) ->
+            // Launch all the watcher updates in parallel
+            val jobs = watchedStreams.map { (name, watcher) ->
                 val stream = streams.find { it.userLogin.equals(name, true) }
-                watcher.handle(stream).await()
+                watcher.handle(stream)
             }
+
+            // Then await them
+            jobs.awaitAll()
         } catch (ex: Exception) {
             if (suppressExpected(ex))
                 log.error("Error in twitch stream service", ex)
@@ -111,13 +113,6 @@ suspend fun <T> Deferred<T>.getOrNull(comment: String) = try {
     null
 }
 
-data class GoLive(
-    val stream: Stream,
-    val game: Game,
-    val videoId: String,
-    val thumbnail: InputStream?
-)
-
 class StreamWatcher(
     private val twitch: TwitchApi,
     private val jda: JDA,
@@ -134,7 +129,7 @@ class StreamWatcher(
     private val timestamps: MutableList<StreamElement> = mutableListOf()
     private val webhook: WebhookClient<*> = configuration.streamNotifications.asWebhook(jda)
 
-    fun handle(stream: Stream?) = jda.scope.defer {
+    fun handle(stream: Stream?) = jda.scope.async {
         // There are 4 states we can process
         if (currentElement != null) {
             when {
@@ -183,7 +178,7 @@ class StreamWatcher(
                     thumbnail = getThumbnail.await()
                 }
 
-                handleGoLive(GoLive(stream, game, videoId, thumbnail))
+                handleGoLive(stream, game, videoId, thumbnail)
             }
         }
     }
@@ -260,8 +255,7 @@ class StreamWatcher(
         }
     }
 
-    private suspend fun handleGoLive(event: GoLive) {
-        val (stream, game, videoId, thumbnail) = event
+    private suspend fun handleGoLive(stream: Stream, game: Game, videoId: String, thumbnail: InputStream?) {
         language = getLocale(stream)
         log.info("Stream from {} started with game {} ({})", userLogin, game.name, game.gameId)
         updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))

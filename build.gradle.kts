@@ -36,8 +36,12 @@ val build by tasks
 val compileKotlin: KotlinCompile by tasks
 val shadowJar: ShadowJar by tasks
 
-compileKotlin.apply {
-    kotlinOptions.jvmTarget = "11"
+compileKotlin.kotlinOptions.apply {
+    jvmTarget = "11"
+    freeCompilerArgs = listOf(
+        "-Xjvm-default=all",  // use default methods in interfaces
+        "-Xlambdas=indy"      // use invokedynamic lambdas instead of synthetic classes
+    )
 }
 
 tasks.create<Copy>("install") {

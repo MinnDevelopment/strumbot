@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "1.2.0"
+version = "1.2.0-rc"
 
 repositories {
     mavenLocal() // caching optimization

@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "1.2.0"
+version = "1.2.1-rc.1"
 
 repositories {
     mavenLocal() // caching optimization
@@ -38,7 +38,6 @@ val clean by tasks
 val build by tasks
 val compileKotlin: KotlinCompile by tasks
 val shadowJar: ShadowJar by tasks
-shadowJar.minimize()
 
 compileKotlin.kotlinOptions.apply {
     jvmTarget = "11"

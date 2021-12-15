@@ -1,4 +1,4 @@
-FROM adoptopenjdk:14.0.1_7-jdk-hotspot
+FROM openjdk:17.0.1-slim
 
 WORKDIR /opt/strumbot
 

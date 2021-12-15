@@ -21,7 +21,6 @@ import net.dv8tion.jda.api.utils.data.DataType
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.io.FileNotFoundException
-import java.time.ZoneId
 import kotlin.math.max
 import kotlin.math.min
 
@@ -61,7 +60,7 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
             "vod" to getString("vod", "")
         )
     }
-    val events = discord.getArray("enabled_events").asSequence().map(Any::toString).toSet()
+    val events = discord.getArray("enabled_events").map(Any::toString).toSet()
     val userLogin = if (twitch.isType("user_login", DataType.ARRAY))
                         twitch.getArray("user_login").map(Any::toString).toSet()
                     else

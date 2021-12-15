@@ -2,17 +2,17 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    id("com.github.johnrengelman.shadow") version "5.1.0"
+    id("com.github.johnrengelman.shadow") version "7.1.1"
     kotlin("jvm") version "1.6.0"
     application
 }
 
 application {
-    mainClassName = "strumbot.Main"
+    mainClass.set("strumbot.Main")
 }
 
 group = "dev.minn"
-version = "1.1.2"
+version = "1.2.0"
 
 repositories {
     mavenLocal() // caching optimization
@@ -26,13 +26,9 @@ dependencies {
     implementation("net.dv8tion:JDA:4.+") {
         exclude(module="opus-java")
     }
-    implementation("com.github.minndevelopment:jda-reactor:77d7fcb")
     implementation("com.github.minndevelopment:jda-ktx:34b55c0")
-    implementation("io.projectreactor:reactor-core:3.3.15.RELEASE")
-    implementation("io.projectreactor.kotlin:reactor-kotlin-extensions:1.1.3")
     implementation(kotlin("stdlib-jdk8"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0-RC2")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor:1.5.0")
 }
 
 val clean by tasks
@@ -40,8 +36,12 @@ val build by tasks
 val compileKotlin: KotlinCompile by tasks
 val shadowJar: ShadowJar by tasks
 
-compileKotlin.apply {
-    kotlinOptions.jvmTarget = "11"
+compileKotlin.kotlinOptions.apply {
+    jvmTarget = "11"
+    freeCompilerArgs = listOf(
+        "-Xjvm-default=all",  // use default methods in interfaces
+        "-Xlambdas=indy"      // use invokedynamic lambdas instead of synthetic classes
+    )
 }
 
 tasks.create<Copy>("install") {

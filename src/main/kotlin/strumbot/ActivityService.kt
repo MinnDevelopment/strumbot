@@ -18,12 +18,10 @@ package strumbot
 
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Activity
-import reactor.core.publisher.Flux
-import reactor.core.scheduler.Scheduler
-import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
+import kotlin.time.Duration.Companion.seconds
 
-class ActivityService(private val jda: JDA, private val pool: Scheduler) {
+class ActivityService(private val jda: JDA) {
     private val activities = CopyOnWriteArrayList<Activity>()
     private var currentIndex = 0
 
@@ -36,18 +34,16 @@ class ActivityService(private val jda: JDA, private val pool: Scheduler) {
     }
 
     fun start() {
-        Flux.interval(Duration.ofSeconds(5), Duration.ofSeconds(15), pool)
-            .map { activities }
-            .subscribe {
-                if (it.isEmpty()) {
-                    if (jda.presence.activity != null)
-                        jda.presence.activity = null
-                } else {
-                    activities[currentIndex++ % it.size].let { activity ->
-                        if (jda.presence.activity != activity)
-                            jda.presence.activity = activity
-                    }
+        jda.repeatUntilShutdown(15.seconds, 5.seconds) {
+            if (activities.isEmpty()) {
+                if (jda.presence.activity != null)
+                    jda.presence.activity = null
+            } else {
+                activities[currentIndex++ % activities.size].let { activity ->
+                    if (jda.presence.activity != activity)
+                        jda.presence.activity = activity
                 }
             }
+        }
     }
 }

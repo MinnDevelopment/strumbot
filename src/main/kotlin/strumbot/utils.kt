@@ -16,33 +16,11 @@
 
 package strumbot
 
-import club.minnced.jda.reactor.on
-import kotlinx.coroutines.reactive.awaitFirstOrNull
+import dev.minn.jda.ktx.scope
+import kotlinx.coroutines.*
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Guild
-import net.dv8tion.jda.api.events.interaction.SlashCommandEvent
-import net.dv8tion.jda.api.requests.RestAction
-import org.slf4j.LoggerFactory
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
-import reactor.util.function.Tuple2
-import reactor.util.function.Tuple3
-import reactor.util.function.Tuple4
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
-import kotlin.coroutines.suspendCoroutine
-
-operator fun <T> Tuple2<T, *>.component1(): T = t1
-operator fun <T> Tuple2<*, T>.component2(): T = t2
-
-operator fun <T> Tuple3<T, *, *>.component1(): T = t1
-operator fun <T> Tuple3<*, T, *>.component2(): T = t2
-operator fun <T> Tuple3<*, *, T>.component3(): T = t3
-
-operator fun <T> Tuple4<T, *, *, *>.component1(): T = t1
-operator fun <T> Tuple4<*, T, *, *>.component2(): T = t2
-operator fun <T> Tuple4<*, *, T, *>.component3(): T = t3
-operator fun <T> Tuple4<*, *, *, T>.component4(): T = t4
+import kotlin.time.Duration
 
 // Convert role type to role id
 private val rankByType: MutableMap<String, String> = mutableMapOf()
@@ -61,18 +39,19 @@ fun JDA.getRoleByType(configuration: Configuration, type: String): String {
     return rankByType[type] ?: "0"
 }
 
-suspend fun <T> RestAction<T>.await() = suspendCoroutine<T> { cont ->
-    queue(cont::resume, cont::resumeWithException)
+inline fun JDA.repeatUntilShutdown(rate: Duration, initDelay: Duration = rate, crossinline task: suspend CoroutineScope.() -> Unit): Job {
+    return scope.launch {
+        delay(initDelay)
+        while (status != JDA.Status.SHUTDOWN) {
+            task()
+            delay(rate)
+        }
+    }
 }
 
-fun JDA.onCommand(name: String): Flux<SlashCommandEvent> = on<SlashCommandEvent>().filter { it.name == name }
+inline fun <T : AutoCloseable, R> T.useCatching(fn: () -> R) = runCatching {
+    fn()
+}.also { close() }
 
-fun <T> Mono<T>.ignoreFailure(): Mono<T> =
-    doOnError { LoggerFactory.getLogger(StreamWatcher::class.java).error("Could not fetch video.", it) }
-      .onErrorResume(HttpException::class.java) { Mono.empty() }
-fun <T> Flux<T>.ignoreFailure(): Flux<T> =
-    doOnError { LoggerFactory.getLogger(StreamWatcher::class.java).error("Could not fetch video.", it) }
-        .onErrorResume(HttpException::class.java) { Mono.empty() }
+fun <T> CoroutineScope.defer(task: suspend CoroutineScope.() -> T) = async(start = CoroutineStart.LAZY, block = task)
 
-suspend fun <T> Mono<T>.await(): T? = ignoreFailure().awaitFirstOrNull()
-suspend fun <T> Flux<T>.await(): T? = ignoreFailure().awaitFirstOrNull()

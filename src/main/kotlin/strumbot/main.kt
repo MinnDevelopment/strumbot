@@ -17,41 +17,40 @@
 @file:JvmName("Main")
 package strumbot
 
-import club.minnced.jda.reactor.ReactiveEventManager
-import club.minnced.jda.reactor.asMono
-import club.minnced.jda.reactor.createManager
-import club.minnced.jda.reactor.on
+import dev.minn.jda.ktx.CoroutineEventManager
+import dev.minn.jda.ktx.await
+import dev.minn.jda.ktx.interactions.choice
+import dev.minn.jda.ktx.interactions.option
+import dev.minn.jda.ktx.interactions.upsertCommand
+import dev.minn.jda.ktx.light
+import dev.minn.jda.ktx.listener
+import kotlinx.coroutines.*
 import net.dv8tion.jda.api.JDA
-import net.dv8tion.jda.api.JDABuilder
 import net.dv8tion.jda.api.entities.Member
 import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.Role
+import net.dv8tion.jda.api.events.ReadyEvent
+import net.dv8tion.jda.api.events.ShutdownEvent
+import net.dv8tion.jda.api.events.guild.GenericGuildEvent
 import net.dv8tion.jda.api.events.guild.GuildJoinEvent
 import net.dv8tion.jda.api.events.guild.GuildReadyEvent
+import net.dv8tion.jda.api.events.interaction.SlashCommandEvent
 import net.dv8tion.jda.api.exceptions.HierarchyException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
-import net.dv8tion.jda.api.interactions.commands.OptionType
-import net.dv8tion.jda.api.interactions.commands.build.OptionData
-import net.dv8tion.jda.api.requests.GatewayIntent
-import net.dv8tion.jda.api.requests.restaction.RoleAction
 import net.dv8tion.jda.api.utils.AllowedMentions
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
-import reactor.core.scheduler.Schedulers
-import reactor.kotlin.core.publisher.toFlux
-import reactor.util.retry.Retry
 import java.lang.Integer.max
-import java.time.Duration
 import java.util.*
+import java.util.concurrent.CancellationException
 import java.util.concurrent.Executors
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.TimeUnit
 import kotlin.concurrent.thread
+import kotlin.time.Duration.Companion.minutes
 
 private val log = LoggerFactory.getLogger("Main") as Logger
 
@@ -61,8 +60,6 @@ private val pool = Executors.newScheduledThreadPool(getThreadCount()) {
     thread(start=false, name="Worker-Thread", isDaemon=true, block=it::run)
 }
 
-private val poolScheduler = Schedulers.fromExecutor(pool)
-
 fun main() {
     AllowedMentions.setDefaultMentions(EnumSet.of(Message.MentionType.ROLE))
 
@@ -71,30 +68,49 @@ fun main() {
         .connectionPool(ConnectionPool(2, 20, TimeUnit.SECONDS))
         .build()
 
-    log.info("Initializing twitch api")
-    val twitch = createTwitchApi(
-        okhttp, poolScheduler,
-        configuration.twitchClientId, configuration.twitchClientSecret
-    ).block()!!
+    // Use the global thread pool for coroutine dispatches
+    val dispatcher = pool.asCoroutineDispatcher()
+    // Using a SupervisorJob allows coroutines to fail without cancelling all other jobs
+    val supervisor = SupervisorJob()
+    // Implement a logging exception handler for uncaught throws in launched jobs
+    val handler = CoroutineExceptionHandler { _, throwable ->
+        if (throwable !is CancellationException)
+            log.error("Uncaught exception in coroutine", throwable)
+    }
 
-    log.info("Initializing discord connection")
-    val manager = createManager { this.scheduler = poolScheduler }
+    // Create our coroutine scope, this will stop the entire bot if a job fails
+    val context = dispatcher + supervisor + handler
+    val scope = CoroutineScope(context)
+
+    // Create a coroutine manager with this scope
+    val manager = CoroutineEventManager(scope)
     manager.initCommands(configuration)
     manager.initRoles(configuration)
-    val jda = JDABuilder.createLight(configuration.token, GatewayIntent.GUILD_MESSAGES)
-        .setEventManager(manager)
-        .setHttpClient(okhttp)
-        .setCallbackPool(pool)
-        .setGatewayPool(pool)
-        .setRateLimitPool(pool)
-        .build()
+
+    manager.listener<ShutdownEvent> {
+        supervisor.cancel()
+    }
+
+    log.info("Initializing twitch api")
+    val twitch: TwitchApi = runBlocking {
+        createTwitchApi(okhttp, configuration.twitchClientId, configuration.twitchClientSecret, scope)
+    }
+
+    log.info("Initializing discord connection")
+    val jda = light(configuration.token, enableCoroutines=false, timeout=1.minutes, intents=emptyList()) {
+        setEventManager(manager)
+        setHttpClient(okhttp)
+        setCallbackPool(pool)
+        setGatewayPool(pool)
+        setRateLimitPool(pool)
+    }.awaitReady()
 
     configuration.logging?.let {
         WebhookAppender.init(jda, it)
     }
 
     // Cycling streaming status
-    val activityService = ActivityService(jda, poolScheduler)
+    val activityService = ActivityService(jda)
     activityService.start()
 
     setupRankListener(jda, configuration)
@@ -107,78 +123,108 @@ fun main() {
         watchedStreams[key] = StreamWatcher(twitch, jda, configuration, userLogin, activityService)
     }
 
-    startTwitchService(twitch, watchedStreams, poolScheduler)
-        .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMinutes(1)).transientErrors(true))
-        .doFinally {
-            log.warn("Twitch service terminated unexpectedly with signal {}", it)
-            jda.shutdownNow()
-        }.subscribe()
+    val twitchJob = startTwitchService(twitch, jda, watchedStreams)
+
+    twitchJob.invokeOnCompletion {
+        if (it != null && it !is CancellationException) {
+            log.error("Twitch service terminated unexpectedly", it)
+            supervisor.cancel()
+        }
+    }
+
+    supervisor.invokeOnCompletion {
+        if (it != null && it !is CancellationException) {
+            log.error("Supervisor failed with unexpected error", it)
+        } else {
+            log.info("Shutting down")
+        }
+
+        jda.shutdown()
+        twitchJob.cancel()
+    }
 
     System.gc()
 }
 
-private fun ReactiveEventManager.initRoles(configuration: Configuration) {
-    val listener = Flux.merge(
-        on<GuildReadyEvent>().map(GuildReadyEvent::getGuild),
-        on<GuildJoinEvent>().map(GuildJoinEvent::getGuild)
-    )
+/**
+ * Creates the roles which are mentioned for webhook notifications
+ */
+private fun CoroutineEventManager.initRoles(configuration: Configuration) {
+    listener<GenericGuildEvent> { event ->
+        if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
+        val guild = event.guild
 
-    val ranks = configuration.ranks.values
-    listener
-        .filter { filterId(it, configuration.guildId) }
-        .flatMap { guild ->
-            ranks.toFlux()
-                 .filter { guild.getRolesByName(it, true).isEmpty() }
-                 .map { guild.createRole().setName(it) }
-                 .flatMap(RoleAction::asMono)
-        }
-        .subscribe { log.info("Created role ${it.name} in ${it.guild.name}") }
+        if (!filterId(guild, configuration.guildId)) return@listener
+
+        configuration.ranks.values
+            .asSequence()
+            .filter { guild.getRolesByName(it, true).isEmpty() }
+            .map { guild.createRole().setName(it) }
+            .forEach {
+                val role = it.await()
+                log.info("Created role {} in {}", role.name, guild.name)
+            }
+    }
 }
 
-private fun ReactiveEventManager.initCommands(configuration: Configuration) {
-    on<GuildReadyEvent>().map { it.guild }
-        .mergeWith(on<GuildJoinEvent>().map { it.guild })
-        .flatMap { guild ->
-            guild.upsertCommand("rank", "Add or remove one of the notification roles") // TODO: Use jda-ktx
-                .addOptions(OptionData(OptionType.STRING, "role", "The role to assign or remove you from").also {
-                    configuration.ranks.forEach { (_, value) -> it.addChoice(value, value) }
-                    it.isRequired = true
-                })
-                .asMono()
-        }
-        .subscribe()
+/**
+ * Creates the relevant commands for role management
+ */
+private fun CoroutineEventManager.initCommands(configuration: Configuration) {
+    listener<GenericGuildEvent> { event ->
+        if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
+        val guild = event.guild
+
+        guild.upsertCommand("rank", "Add or remove one of the notification roles") {
+            option<String>("role", "The role to assign or remove you from", required = true) {
+                configuration.ranks.forEach { (_, value) ->
+                    choice(value, value)
+                }
+            }
+        }.queue()
+    }
 }
 
+/**
+ * Handles the rank command
+ */
 private fun setupRankListener(jda: JDA, configuration: Configuration) {
-    jda.onCommand("rank")
-       .flatMap { event ->
-           val guild = event.guild ?: return@flatMap Mono.empty<Unit>()
-           val type = event.getOption("role")?.asString ?: ""
-           val role = guild.getRoleById(jda.getRoleByType(configuration, type)) ?: return@flatMap Mono.empty<Unit>()
-           val member = event.member ?: return@flatMap Mono.empty<Unit>()
-           event.deferReply(true).queue() // This is required to handle delayed response
-           event.hook.setEphemeral(true)
-           toggleRole(member, role).flatMap {
-               event.hook.sendMessage(if (it) "Added the role" else "Removed the role").asMono()
-           }.onErrorResume(PermissionException::class.java) {
-               event.hook.sendMessage(handlePermissionError(it, role)).asMono()
-           }
-       }
-       .retryWhen(Retry.indefinitely().filter { it !is Error })
-       .subscribe()
+    jda.listener<SlashCommandEvent>(timeout = 1.minutes) { event ->
+        if (event.name != "rank") return@listener
+
+        val guild = event.guild ?: return@listener
+        val member = event.member ?: return@listener
+
+        // Get the role instance for the requested rank
+        val type = event.getOption("role")?.asString ?: ""
+        val role = guild.getRoleById(jda.getRoleByType(configuration, type)) ?: return@listener
+
+        event.deferReply(true).queue() // This is required to handle delayed response
+        event.hook.setEphemeral(true) // Make messages only visible to command user
+
+        try {
+            val added = toggleRole(member, role)
+            event.hook.sendMessage(if (added) "Added the role" else "Removed the role").await()
+        } catch (ex: PermissionException) {
+            // If there is a permission issue, handle it by telling the user about the problem
+            event.hook.sendMessage(handlePermissionError(ex, role)).await()
+            log.error("Failed to add or remove role for a member. Member: {} ({}) Role: {} ({})",
+                      member.user.asTag, member.id, role.name, role.id, ex)
+        }
+    }
 }
 
-private fun toggleRole(
+private suspend fun toggleRole(
     member: Member,
     role: Role
-): Mono<Boolean> = Mono.defer {
-    if (role in member.roles) {
-        log.debug("Removing ${role.name} from ${member.user.asTag}")
-        role.guild.removeRoleFromMember(member, role).asMono().thenReturn(false)
-    } else {
-        log.debug("Adding ${role.name} to ${member.user.asTag}")
-        role.guild.addRoleToMember(member, role).asMono().thenReturn(true)
-    }
+) = if (role in member.roles) {
+    log.debug("Removing {} from {}", role.name, member.user.asTag)
+    role.guild.removeRoleFromMember(member, role).await()
+    false
+} else {
+    log.debug("Adding {} to {}", role.name, member.user.asTag)
+    role.guild.addRoleToMember(member, role).await()
+    true
 }
 
 private fun handlePermissionError(

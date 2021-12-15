@@ -16,42 +16,25 @@
 
 package strumbot
 
-import club.minnced.jda.reactor.asMono
-import dev.minn.jda.ktx.EmbedBuilder
-import dev.minn.jda.ktx.InlineEmbed
-import dev.minn.jda.ktx.Message
-import kotlinx.coroutines.reactive.awaitFirstOrNull
-import kotlinx.coroutines.reactor.mono
+import dev.minn.jda.ktx.*
+import kotlinx.coroutines.*
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Activity
-import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.WebhookClient
 import net.dv8tion.jda.api.requests.RestAction
 import net.dv8tion.jda.api.utils.MarkdownUtil.maskedLink
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
-import reactor.core.Exceptions
-import reactor.core.publisher.Flux
-import reactor.core.publisher.Mono
-import reactor.core.scheduler.Scheduler
-import reactor.kotlin.core.publisher.toFlux
-import reactor.kotlin.core.publisher.toMono
-import reactor.util.function.Tuple4
-import reactor.util.retry.Retry
 import java.io.InputStream
 import java.net.SocketException
 import java.net.SocketTimeoutException
 import java.net.UnknownHostException
 import java.time.Duration
 import java.time.OffsetDateTime
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 import java.util.*
-import strumbot.ignoreFailure
-import strumbot.component1
-import strumbot.component2
-import strumbot.component3
-import strumbot.component4
+import java.util.concurrent.CancellationException
+import kotlin.time.Duration.Companion.ZERO
+import kotlin.time.Duration.Companion.seconds
 
 private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
 const val OFFLINE_DELAY = 2L * 60L // 2 minutes
@@ -63,13 +46,13 @@ private val ignoredErrors = setOf<Class<*>>(
     UnknownHostException::class.java          // DNS errors
 )
 
-fun suppressExpected(t: Throwable) = !Exceptions.isOverflow(t) && t::class.java !in ignoredErrors
+fun suppressExpected(t: Throwable) = t::class.java !in ignoredErrors
 
 fun startTwitchService(
     twitch: TwitchApi,
-    watchedStreams: Map<String, StreamWatcher>,
-    poolScheduler: Scheduler
-): Flux<*> {
+    jda: JDA,
+    watchedStreams: Map<String, StreamWatcher>
+): Job {
     log.info("Listening for stream(s) from {}",
         if (watchedStreams.size == 1)
             watchedStreams.keys.first()
@@ -77,18 +60,26 @@ fun startTwitchService(
             watchedStreams.keys.toString()
     )
 
-    return Flux.interval(Duration.ZERO, Duration.ofSeconds(30), poolScheduler)
-        .flatMap { twitch.getStreamByLogin(watchedStreams.keys) }
-        .flatMapSequential { streams ->
-            Flux.merge(watchedStreams.map { entry ->
-                val (name, watcher) = entry
+    return jda.repeatUntilShutdown(30.seconds, ZERO) {
+        try {
+            val streams = twitch.getStreamByLogin(watchedStreams.keys).await() ?: return@repeatUntilShutdown
+
+            // Launch all the watcher updates in parallel
+            val jobs = watchedStreams.map { (name, watcher) ->
                 val stream = streams.find { it.userLogin.equals(name, true) }
                 watcher.handle(stream)
-            })
+            }
+
+            // Then await them
+            jobs.awaitAll()
+        } catch (ex: Exception) {
+            if (suppressExpected(ex))
+                log.error("Error in twitch stream service", ex)
+            // Authorization errors should cancel our process
+            if (ex is NotAuthorized)
+                throw ex
         }
-        .doOnError(::suppressExpected) { log.error("Error in twitch stream service", it) }
-        .retryWhen(Retry.indefinitely().filter { it !is Error && it !is HttpException })
-        .retryWhen(Retry.backoff(2, Duration.ofSeconds(30)).transientErrors(true))
+    }
 }
 
 data class Timestamps(val display: String, val twitchFormat: String) {
@@ -115,6 +106,13 @@ data class StreamElement(val game: Game, val timestamp: Int, var videoId: String
     }
 }
 
+suspend fun <T> Deferred<T>.getOrNull(comment: String) = try {
+    await()
+} catch (ex: Exception) {
+    log.error("Failed to fetch {}", comment, ex)
+    null
+}
+
 class StreamWatcher(
     private val twitch: TwitchApi,
     private val jda: JDA,
@@ -131,9 +129,9 @@ class StreamWatcher(
     private val timestamps: MutableList<StreamElement> = mutableListOf()
     private val webhook: WebhookClient<*> = configuration.streamNotifications.asWebhook(jda)
 
-    fun handle(stream: Stream?): Mono<*> {
+    fun handle(stream: Stream?) = jda.scope.async {
         // There are 4 states we can process
-        return if (currentElement != null) {
+        if (currentElement != null) {
             when {
                 // 1. The stream was online and is now offline
                 // => Send offline notification (vod event)
@@ -143,25 +141,21 @@ class StreamWatcher(
                 // => Send update game notification (update event)
                 stream.gameId != currentElement?.game?.gameId -> {
                     offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
-                    twitch.getVideoByStream(stream)
-                        .ignoreFailure()
-                        .map(Video::id).switchIfEmpty("".toMono())
-                        .flatMap { handleUpdate(stream, it) }
+                    val video = twitch.getVideoByStream(stream).getOrNull("video")
+                    handleUpdate(stream, video?.id ?: "")
                 }
 
                 // 3. The stream was online and has not switched the game
                 // => Do nothing
                 else -> {
-                    offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
-                    if (currentElement?.videoId == "") { // if twitch failed to provide a vod link try updating it
-                        twitch.getVideoByStream(stream)
-                            .map(Video::id)
-                            .ignoreFailure()
-                            .flatMap {
-                                currentElement?.apply { videoId = it }
-                                Mono.empty<Message>()
-                            }
-                    } else Mono.empty()
+                    offlineTimestamp = 0 // We can skip one offline event since we are currently live, and it might hickup
+                    if (currentElement?.videoId == "") { // if twitch failed to provide a vod link, try updating it
+                        val video = twitch.getVideoByStream(stream).getOrNull("video")
+
+                        video?.id?.let {
+                            currentElement?.videoId = it
+                        }
+                    }
                 }
             }
         } else {
@@ -169,18 +163,22 @@ class StreamWatcher(
             // => Send go live notification (live event)
             if (stream != null) {
                 offlineTimestamp = 0 // We can skip one offline event since we are currently live and it might hickup
-                val getStream = stream.toMono()
-                val getGame = twitch.getGame(stream).ignoreFailure()
-                val getVod = twitch.getVideoByStream(stream).ignoreFailure().map(Video::id).switchIfEmpty("".toMono())
-                val getThumbnail = twitch.getThumbnail(stream)
-                    .ignoreFailure()
-                    .map { Optional.of(it) }
-                    .switchIfEmpty(Optional.empty<InputStream>().toMono())
+                val game: Game
+                val videoId: String
+                val thumbnail: InputStream?
+                // Run stuff async
+                jda.scope.apply {
+                    // Launch each getter in parallel
+                    val getGame = async { twitch.getGame(stream).getOrNull("game") ?: EMPTY_GAME }
+                    val getVod = async { twitch.getVideoByStream(stream).getOrNull("video")?.id ?: "" }
+                    val getThumbnail = async { twitch.getThumbnail(stream).getOrNull("thumbnail") }
 
-                Mono.zip(getStream, getGame, getVod, getThumbnail)
-                    .flatMap(this::handleGoLive)
-            } else {
-                Mono.empty()
+                    game = getGame.await()
+                    videoId = getVod.await()
+                    thumbnail = getThumbnail.await()
+                }
+
+                handleGoLive(stream, game, videoId, thumbnail)
             }
         }
     }
@@ -193,12 +191,12 @@ class StreamWatcher(
 
     /// EVENTS
 
-    private fun handleOffline(): Mono<*> {
+    private suspend fun handleOffline() {
         if (offlineTimestamp == 0L) {
             offlineTimestamp = OffsetDateTime.now().toEpochSecond()
-            return Mono.empty<Unit>()
+            return
         } else if (OffsetDateTime.now().toEpochSecond() - offlineTimestamp < OFFLINE_DELAY) {
-            return Mono.empty<Unit>()
+            return
         }
 
         log.info("Stream from $userLogin went offline!")
@@ -209,67 +207,64 @@ class StreamWatcher(
         val firstSegment = timestamps.first()
         this.timestamps.clear()
 
-        return mono {
-            val index = timestamps.asSequence()
-                                  .map { it.toVodLink() }
-                                  .fold(StringBuilder()) { a, b -> a.append('\n').append(b) }
+        val index = timestamps.asSequence()
+                              .map { it.toVodLink() }
+                              .fold(StringBuilder()) { a, b -> a.append('\n').append(b) }
 
-            // Find most recent video available, the streamer might delete a vod during the stream
-            val video = timestamps
-                .asReversed()
-                .toFlux()
-                .map { it.videoId }
-                .filter { it.isNotEmpty() }
-                .flatMap { twitch.getVideoById(it) }
-                .await()
+        // Find most recent video available, the streamer might delete a vod during the stream
+        val video = timestamps
+            .asReversed()
+            .map { it.videoId }
+            .filter { it.isNotEmpty() }
+            .map { twitch.getVideoById(it).await() }
+            .firstOrNull()
 
-            val thumbnail = video?.let { twitch.getThumbnail(it).await() }
-            val videoUrl = firstSegment.toVideoUrl()
+        val thumbnail = video?.let { twitch.getThumbnail(it).await() }
+        val videoUrl = firstSegment.toVideoUrl()
 
-            val clips = if (configuration.topClips > 0)
-                twitch.getTopClips(userId, streamStarted, configuration.topClips).await() ?: emptyList()
-            else
-                emptyList()
+        val clips = if (configuration.topClips > 0)
+            twitch.getTopClips(userId, streamStarted, configuration.topClips).await() ?: emptyList()
+        else
+            emptyList()
 
-            val embed = makeEmbedBase(video?.title ?: "<Video Removed>", videoUrl).apply {
-                appendIndex(index)
-                if (clips.isNotEmpty()) field {
-                    inline = false
-                    name = getText(language, "offline.clips")
-                    value = clips.asSequence()
-                        .withIndex()
-                        .map { (i, it) ->
-                            val link = maskedLink(limit(it.title, 25) + " \uD83E\uDC55", it.url)
-                            // <index> <Title> - <ViewCount> views
-                            "`${i + 1}.` $link \u2022 **${it.views}**\u00A0views"
-                        }
-                        .joinToString("\n")
+        val embed = makeEmbedBase(video?.title ?: "<Video Removed>", videoUrl).apply {
+            appendIndex(index)
+            if (clips.isNotEmpty()) field {
+                inline = false
+                name = getText(language, "offline.clips")
+                value = clips.asSequence()
+                    .withIndex()
+                    .map { (i, it) ->
+                        val link = maskedLink(limit(it.title, 25) + " \uD83E\uDC55", it.url)
+                        // <index> <Title> - <ViewCount> views
+                        "`${i + 1}.` $link \u2022 **${it.views}**\u00A0views"
+                    }
+                    .joinToString("\n")
+            }
+        }
+
+        withPing("vod") { mention ->
+            val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
+            val content = "$mention ${getText(language, "offline.content", "name" to userLogin, "time" to duration)}"
+            val message = Message(content = content, embed = embed.build())
+            webhook.fireEvent("vod") {
+                sendMessage(message).apply {
+                    thumbnail?.let { addFile(it, "thumbnail.jpg") }
                 }
             }
-
-            withPing("vod") { mention ->
-                val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
-                val content = "$mention ${getText(language, "offline.content", "name" to userLogin, "time" to duration)}"
-                val message = Message(content = content, embed = embed.build())
-                webhook.fireEvent("vod") {
-                    sendMessage(message).apply {
-//                        setUsername(HOOK_NAME)
-                        thumbnail?.let { addFile(it, "thumbnail.jpg") }
-                    }
-                }
-            }.awaitFirstOrNull()
         }
     }
 
-    private fun handleGoLive(tuple: Tuple4<Stream, Game, String, Optional<InputStream>>): Mono<*> {
-        val (stream, game, videoId, thumbnail) = tuple
+    private suspend fun handleGoLive(stream: Stream, game: Game, videoId: String, thumbnail: InputStream?) {
         language = getLocale(stream)
-        log.info("Stream from $userLogin started with game ${game.name} (${game.gameId})")
+        log.info("Stream from {} started with game {} ({})", userLogin, game.name, game.gameId)
         updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
+
         streamStarted = stream.startedAt
         currentElement = StreamElement(game, 0, videoId)
         userId = stream.userId
-        return withPing("live") { mention ->
+
+        withPing("live") { mention ->
             val content = "$mention ${getText(language, "live.content",
                 "name" to userLogin,
                 "game" to "**${game.name}**")
@@ -278,55 +273,51 @@ class StreamWatcher(
             val message = Message(content = content, embed = embed)
             webhook.fireEvent("live") {
                 sendMessage(message).apply {
-//                    setUsername(HOOK_NAME)
-                    thumbnail.ifPresent { addFile(it, "thumbnail.jpg") }
+                    thumbnail?.let { addFile(it, "thumbnail.jpg") }
                 }
             }
         }
     }
 
-    private fun handleUpdate(stream: Stream, videoId: String): Mono<*> {
+    private suspend fun handleUpdate(stream: Stream, videoId: String) {
         timestamps.add(currentElement!!)
         userId = stream.userId
-        return mono {
-            val game = twitch.getGame(stream).await() ?: return@mono null
-            log.info("Stream from $userLogin changed game ${currentElement?.game?.name} -> ${game.name}")
-            updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
-            val timestamp = System.currentTimeMillis() / 1000 - stream.startedAt
-            currentElement = StreamElement(game, timestamp.toInt(), videoId)
-            val thumbnail = twitch.getThumbnail(stream).await()
+        val game = twitch.getGame(stream).await() ?: return
+        log.info("Stream from $userLogin changed game ${currentElement?.game?.name} -> ${game.name}")
+        updateActivity(Activity.streaming("$userLogin playing ${game.name}", "https://www.twitch.tv/${userLogin}"))
+        val timestamp = System.currentTimeMillis() / 1000 - stream.startedAt
+        currentElement = StreamElement(game, timestamp.toInt(), videoId)
+        val thumbnail = twitch.getThumbnail(stream).await()
 
-            withPing("update") { mention ->
-                val content = "$mention ${getText(language, "update.content",
-                    "name" to userLogin,
-                    "game" to "**${game.name}**")
-                }"
-                val embed = makeEmbed(language, stream, game, userLogin, currentElement)
-                val message = Message(content = content, embed = embed)
-                webhook.fireEvent("update") {
-                    sendMessage(message).apply {
-//                        setUsername(HOOK_NAME)
-                        thumbnail?.let { addFile(thumbnail, "thumbnail.jpg") }
-                    }
+        withPing("update") { mention ->
+            val content = "$mention ${getText(language, "update.content",
+                "name" to userLogin,
+                "game" to "**${game.name}**")
+            }"
+            val embed = makeEmbed(language, stream, game, userLogin, currentElement)
+            val message = Message(content = content, embed = embed)
+            webhook.fireEvent("update") {
+                sendMessage(message).apply {
+                    thumbnail?.let { addFile(thumbnail, "thumbnail.jpg") }
                 }
-            }.awaitFirstOrNull()
+            }
         }
     }
 
     /// HELPERS
 
     // Run callback with mentionable role
-    private inline fun <T> withPing(type: String, block: (String) -> Mono<T>): Mono<T> {
+    private inline fun <T> withPing(type: String, block: (String) -> T): T {
         val roleId = jda.getRoleByType(configuration, type)
         return block("<@&$roleId>")
     }
 
     // Fire webhook event if enabled in the configuration
-    private inline fun <T> WebhookClient<*>.fireEvent(type: String, crossinline block: WebhookClient<*>.() -> RestAction<T>): Mono<T> {
+    private suspend inline fun <T> WebhookClient<*>.fireEvent(type: String, crossinline block: WebhookClient<*>.() -> RestAction<T>): T? {
         return if (type in configuration.events) {
-            block(this).asMono()
+            block(this).await()
         } else {
-            Mono.empty()
+            null
         }
     }
 

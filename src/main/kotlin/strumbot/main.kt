@@ -89,7 +89,7 @@ fun main() {
     }
 
     log.info("Initializing discord connection")
-    val jda = light(configuration.token, enableCoroutines=false, timeout=1.minutes) {
+    val jda = light(configuration.token, enableCoroutines=false, timeout=1.minutes, intents=emptyList()) {
         setEventManager(manager)
         setHttpClient(okhttp)
         setCallbackPool(pool)

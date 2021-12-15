@@ -30,29 +30,10 @@ import java.time.Instant
 import java.time.ZonedDateTime
 import kotlin.coroutines.resumeWithException
 
-class HttpException(
-    route: String, status: Int, meaning: String
-): Exception("$route > $status: $meaning")
-
-class NotAuthorized(
-    response: Response
-): Exception("Authorization failed. Code: ${response.code()} Body: ${response.body()!!.string()}")
-
-fun Response.asException() = HttpException(request().url().toString(), code(), message())
-
 suspend fun createTwitchApi(http: OkHttpClient, clientId: String, clientSecret: String, scope: CoroutineScope): TwitchApi {
     val api = TwitchApi(http, clientId, clientSecret, "N/A", scope)
     api.authorize()
     return api
-}
-
-inline fun post(url: String, form: FormBody.Builder.() -> Unit): Request {
-    val body = FormBody.Builder()
-    body.form()
-    return Request.Builder()
-        .url(url)
-        .method("POST", body.build())
-        .build()
 }
 
 class TwitchApi(
@@ -67,7 +48,7 @@ class TwitchApi(
     private val warnedMissingVod = mutableSetOf<String>()
     private val games = FixedSizeMap<String, Game>(10)
 
-    internal suspend fun authorize() = suspendCancellableCoroutine<Unit> { sink ->
+    internal suspend fun authorize() {
         val request = post("https://id.twitch.tv/oauth2/token") {
             add("client_id", clientId)
             add("client_secret", clientSecret)
@@ -75,70 +56,50 @@ class TwitchApi(
         }
 
         val call = http.newCall(request)
-        sink.invokeOnCancellation { call.cancel() }
-
-        call.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                sink.resumeWithException(e)
+        call.await(scope) { response ->
+            when {
+                response.isSuccessful -> {
+                    val json = DataObject.fromJson(response.body!!.byteStream())
+                    accessToken = json.getString("access_token")
+                }
+                response.code < 500 -> throw NotAuthorized(response)
+                else -> throw response.asException()
             }
-
-            override fun onResponse(call: Call, response: Response) {
-                response.useCatching {
-                    when {
-                        response.isSuccessful -> {
-                            val json = DataObject.fromJson(response.body()!!.byteStream())
-                            accessToken = json.getString("access_token")
-                        }
-                        response.code() < 500 -> throw NotAuthorized(response)
-                        else -> throw response.asException()
-                    }
-                }.also(sink::resumeWith)
-            }
-        })
+        }
     }
 
-    private suspend fun <T> makeRequest(request: Request, failed: Boolean = false, handler: (Response) -> T?) = suspendCancellableCoroutine<T?> { sink ->
-        log.trace("Making request to {}", request.url())
+    private suspend fun <T> makeRequest(request: Request, failed: Boolean = false, handler: (Response) -> T?): T? {
+        log.trace("Making request to {}", request.url)
         val call = http.newCall(request)
-        sink.invokeOnCancellation { call.cancel() }
-        call.enqueue(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                sink.resumeWithException(e)
+        return call.await(scope) { response ->
+            log.trace("Got response {} for url {}", response.code, request.url)
+            when {
+                failed && !response.isSuccessful -> { // Prevent infinite loop on broken API
+                    throw response.asException()
+                }
+                response.code == 401 -> { // oauth token expires after a few months of uptime
+                    log.warn("Authorization expired, refreshing token...")
+                    authorize()
+                    // Update authorization header to new token
+                    retryRequest(request)?.let(handler)
+                }
+                response.code == 404 -> {
+                    log.warn("Received 404 response for request to ${request.url}")
+                    null
+                }
+                response.code == 429 -> { // I have never seen this actually happen
+                    log.warn("Hit rate limit, retrying request. Headers:\n{}", response.headers)
+                    val reset = response.header("ratelimit-reset")?.let {
+                        it.toLong() - System.currentTimeMillis()
+                    } ?: 1000
+
+                    delay(reset)
+                    retryRequest(request)?.let(handler)
+                }
+                response.isSuccessful -> handler(response)
+                else -> throw response.asException()
             }
-
-            override fun onResponse(call: Call, response: Response) = scope.launch {
-                response.useCatching {
-                    log.trace("Got response {} for url {}", response.code(), request.url())
-                    when {
-                        failed && !response.isSuccessful -> { // Prevent infinite loop on broken API
-                            throw response.asException()
-                        }
-                        response.code() == 401 -> { // oauth token expires after a few months of uptime
-                            log.warn("Authorization expired, refreshing token...")
-                            authorize()
-                            // Update authorization header to new token
-                            val newRequest = request.newBuilder().authorization().build()
-                            retryRequest(newRequest)?.let(handler)
-                        }
-                        response.code() == 404 -> {
-                            log.warn("Received 404 response for request to ${request.url()}")
-                            null
-                        }
-                        response.code() == 429 -> { // I have never seen this actually happen
-                            log.warn("Hit rate limit, retrying request. Headers:\n{}", response.headers())
-                            val reset = response.header("ratelimit-reset")?.let {
-                                it.toLong() - System.currentTimeMillis()
-                            } ?: 1000
-
-                            delay(reset)
-                            retryRequest(request)?.let(handler)
-                        }
-                        response.isSuccessful -> handler(response)
-                        else -> throw response.asException()
-                    }
-                }.also(sink::resumeWith)
-            }.run {}
-        })
+        }
     }
 
     private suspend fun retryRequest(request: Request): Response? {
@@ -287,7 +248,7 @@ class TwitchApi(
         try {
             makeRequest(request) { response ->
                 val buffer = ByteArrayOutputStream()
-                response.body()!!.byteStream().copyTo(buffer)
+                response.body!!.byteStream().copyTo(buffer)
                 ByteArrayInputStream(buffer.toByteArray())
             }
         } catch (ex: Exception) {
@@ -307,7 +268,7 @@ class TwitchApi(
     }
 
     private fun body(response: Response): DataArray {
-        val json = DataObject.fromJson(response.body()!!.byteStream())
+        val json = DataObject.fromJson(response.body!!.byteStream())
         return json.getArray("data")
     }
 

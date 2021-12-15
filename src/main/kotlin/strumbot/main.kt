@@ -76,14 +76,18 @@ fun main() {
     val handler = CoroutineExceptionHandler { _, throwable ->
         if (throwable !is CancellationException)
             log.error("Uncaught exception in coroutine", throwable)
+        if (throwable is Error) {
+            supervisor.cancel()
+            throw throwable
+        }
     }
 
     // Create our coroutine scope, this will stop the entire bot if a job fails
     val context = dispatcher + supervisor + handler
     val scope = CoroutineScope(context)
 
-    // Create a coroutine manager with this scope
-    val manager = CoroutineEventManager(scope)
+    // Create a coroutine manager with this scope and a default event timeout of 1 minute
+    val manager = CoroutineEventManager(scope, 1.minutes)
     manager.initCommands(configuration)
     manager.initRoles(configuration)
 
@@ -97,7 +101,7 @@ fun main() {
     }
 
     log.info("Initializing discord connection")
-    val jda = light(configuration.token, enableCoroutines=false, timeout=1.minutes, intents=emptyList()) {
+    val jda = light(configuration.token, enableCoroutines=false, intents=emptyList()) {
         setEventManager(manager)
         setHttpClient(okhttp)
         setCallbackPool(pool)

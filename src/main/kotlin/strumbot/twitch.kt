@@ -111,7 +111,8 @@ class TwitchApi(
     }
 
     private fun newRequest(url: String, vararg params: Pair<String, String>): Request.Builder {
-        val query = params.joinToString("&", "?") { "${it.first}=${it.second}" }
+        val query = if (params.isEmpty()) ""
+                    else params.joinToString("&", "?") { "${it.first}=${it.second}" }
         return Request.Builder()
             .url(url + query)
             .header("Client-ID", clientId)

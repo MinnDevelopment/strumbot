@@ -219,10 +219,14 @@ class TwitchApi(
     }
 
     fun getTopClips(userId: String, startedAt: Long, num: Int = 5) = scope.async {
+        // this endpoint has horrible api design
+        // "closed" https://discuss.dev.twitch.tv/t/new-twitch-api-getclips-missing-some-clips-but-not-all/23888/6
+        // twitch filters *after* limiting the number. we need to just get max and then filter
+
         val request = newRequest(
             "https://api.twitch.tv/helix/clips" +
                 "?broadcaster_id=$userId" +
-                "&first=$num" +
+                "&first=100" +
                 "&started_at=${Instant.ofEpochSecond(startedAt)}"
         ).build()
 
@@ -231,7 +235,7 @@ class TwitchApi(
             if (data.length() == 0)
                 emptyList()
             else {
-                List(data.length()) {
+                List(num) {
                     buildVideo(data.getObject(it))
                 }
             }

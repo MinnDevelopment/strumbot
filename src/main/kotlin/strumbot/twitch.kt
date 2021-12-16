@@ -30,6 +30,7 @@ import org.slf4j.Logger
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
+import java.lang.Integer.min
 import java.time.Instant
 import java.time.ZonedDateTime
 
@@ -235,7 +236,7 @@ class TwitchApi(
             if (data.length() == 0)
                 emptyList()
             else {
-                List(num) {
+                List(min(num, data.length())) {
                     buildVideo(data.getObject(it))
                 }
             }

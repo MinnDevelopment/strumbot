@@ -109,9 +109,10 @@ class TwitchApi(
         return makeRequest(request.newBuilder().authorization().build(), true) { it }
     }
 
-    private fun newRequest(url: String): Request.Builder {
+    private fun newRequest(url: String, vararg params: Pair<String, String>): Request.Builder {
+        val query = params.joinToString("&", "?") { "${it.first}=${it.second}" }
         return Request.Builder()
-            .url(url)
+            .url(url + query)
             .header("Client-ID", clientId)
             .authorization()
     }
@@ -119,10 +120,9 @@ class TwitchApi(
     private fun Request.Builder.authorization() = header("Authorization", "Bearer $accessToken")
 
     fun getStreamByLogin(login: Collection<String>) = scope.async {
-        val query = login.asSequence()
-            .map { "user_login=$it" }
-            .joinToString("&")
-        val request = newRequest("https://api.twitch.tv/helix/streams?$query").build()
+        val request = newRequest("https://api.twitch.tv/helix/streams",
+            *login.map { "user_login" to it }.toTypedArray()
+        ).build()
 
         makeRequest(request) { response ->
             val data = body(response)
@@ -153,7 +153,7 @@ class TwitchApi(
         } else if (stream.gameId in games) {
             games[stream.gameId]
         } else {
-            val request = newRequest("https://api.twitch.tv/helix/games?id=${stream.gameId}").build()
+            val request = newRequest("https://api.twitch.tv/helix/games", "id" to stream.gameId).build()
             makeRequest(request) { response ->
                 val data = body(response)
                 if (data.isEmpty) {
@@ -172,7 +172,7 @@ class TwitchApi(
     }
 
     fun getUserIdByLogin(login: String) = scope.async {
-        val request = newRequest("https://api.twitch.tv/helix/users?login=$login").build()
+        val request = newRequest("https://api.twitch.tv/helix/users", "login" to login).build()
         makeRequest(request) { response ->
             val data = body(response)
             if (data.isEmpty)
@@ -194,10 +194,10 @@ class TwitchApi(
     fun getVideoByStream(stream: Stream) = scope.async {
         val userId = stream.userId
         val request = newRequest(
-            "https://api.twitch.tv/helix/videos" +
-                "?type=archive" + // archive = vod
-                "&first=5" + // check 5 most recent videos, just in case it might ignore my type (default 20)
-                "&user_id=$userId"
+            "https://api.twitch.tv/helix/videos",
+                "type" to  "archive", // archive = vod
+                "first" to "5", // check 5 most recent videos, just in case it might ignore my type (default 20)
+                "user_id" to userId
         ).build()
 
         makeRequest(request) { response ->
@@ -224,10 +224,10 @@ class TwitchApi(
         // twitch filters *after* limiting the number. we need to just get max and then filter
 
         val request = newRequest(
-            "https://api.twitch.tv/helix/clips" +
-                "?broadcaster_id=$userId" +
-                "&first=100" +
-                "&started_at=${Instant.ofEpochSecond(startedAt)}"
+            "https://api.twitch.tv/helix/clips",
+                "broadcaster_id" to userId,
+                "first" to "100",
+                "started_at" to "${Instant.ofEpochSecond(startedAt)}"
         ).build()
 
         makeRequest(request) { response ->

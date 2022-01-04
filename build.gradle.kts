@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("com.github.johnrengelman.shadow") version "7.1.1"
-    kotlin("jvm") version "1.6.0"
+    kotlin("jvm") version "1.6.10"
     application
 }
 
@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "1.2.1-rc.1"
+version = "1.2.1-rc.2"
 
 repositories {
     mavenLocal() // caching optimization
@@ -30,7 +30,7 @@ dependencies {
     implementation("ch.qos.logback:logback-classic:1.2.8")
     implementation("com.squareup.okhttp3:okhttp:4.9.3")
 
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0-RC2")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0")
     implementation(kotlin("stdlib-jdk8"))
 }
 

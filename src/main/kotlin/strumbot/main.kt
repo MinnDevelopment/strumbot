@@ -23,7 +23,7 @@ import dev.minn.jda.ktx.interactions.choice
 import dev.minn.jda.ktx.interactions.option
 import dev.minn.jda.ktx.interactions.upsertCommand
 import dev.minn.jda.ktx.light
-import dev.minn.jda.ktx.listener
+import dev.minn.jda.ktx.onCommand
 import kotlinx.coroutines.*
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Member
@@ -33,10 +33,10 @@ import net.dv8tion.jda.api.events.ShutdownEvent
 import net.dv8tion.jda.api.events.guild.GenericGuildEvent
 import net.dv8tion.jda.api.events.guild.GuildJoinEvent
 import net.dv8tion.jda.api.events.guild.GuildReadyEvent
-import net.dv8tion.jda.api.events.interaction.SlashCommandEvent
 import net.dv8tion.jda.api.exceptions.HierarchyException
 import net.dv8tion.jda.api.exceptions.InsufficientPermissionException
 import net.dv8tion.jda.api.exceptions.PermissionException
+import net.dv8tion.jda.api.requests.RestAction
 import net.dv8tion.jda.api.utils.AllowedMentions
 import okhttp3.ConnectionPool
 import okhttp3.OkHttpClient
@@ -60,6 +60,7 @@ private val pool = Executors.newScheduledThreadPool(getThreadCount()) {
 }
 
 fun main() {
+    RestAction.setDefaultTimeout(10, TimeUnit.SECONDS)
     AllowedMentions.setDefaultMentions(EnumSet.of(Message.MentionType.ROLE))
 
     val configuration = loadConfiguration("config.json")
@@ -152,70 +153,65 @@ fun main() {
 /**
  * Creates the roles which are mentioned for webhook notifications
  */
-private fun CoroutineEventManager.initRoles(configuration: Configuration) {
-    listener<GenericGuildEvent> { event ->
-        if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
-        val guild = event.guild
+private fun CoroutineEventManager.initRoles(configuration: Configuration) = listener<GenericGuildEvent> { event ->
+    if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
+    val guild = event.guild
 
-        if (!filterId(guild, configuration.guildId)) return@listener
+    if (!filterId(guild, configuration.guildId)) return@listener
 
-        configuration.ranks.values
-            .asSequence()
-            .filter { guild.getRolesByName(it, true).isEmpty() }
-            .map { guild.createRole().setName(it) }
-            .forEach {
-                val role = it.await()
-                log.info("Created role {} in {}", role.name, guild.name)
-            }
-    }
+    configuration.ranks.values
+        .asSequence()
+        .filter { guild.getRolesByName(it, true).isEmpty() }
+        .map { guild.createRole().setName(it) }
+        .forEach {
+            val role = it.await()
+            log.info("Created role {} in {}", role.name, guild.name)
+        }
 }
 
 /**
  * Creates the relevant commands for role management
  */
-private fun CoroutineEventManager.initCommands(configuration: Configuration) {
-    listener<GenericGuildEvent> { event ->
-        if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
-        val guild = event.guild
+private fun CoroutineEventManager.initCommands(configuration: Configuration) = listener<GenericGuildEvent> { event ->
+    if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
+    val guild = event.guild
 
-        if (!filterId(guild, configuration.guildId)) return@listener
+    if (!filterId(guild, configuration.guildId)) return@listener
 
-        guild.upsertCommand("rank", "Add or remove one of the notification roles") {
-            option<String>("role", "The role to assign or remove you from", required = true) {
-                configuration.ranks.forEach { (_, value) ->
-                    choice(value, value)
-                }
+    guild.upsertCommand("rank", "Add or remove one of the notification roles") {
+        option<String>("role", "The role to assign or remove you from", required = true) {
+            configuration.ranks.forEach { (_, value) ->
+                choice(value, value)
             }
-        }.queue()
-    }
+        }
+    }.queue()
 }
 
 /**
  * Handles the rank command
  */
-private fun setupRankListener(jda: JDA, configuration: Configuration) {
-    jda.listener<SlashCommandEvent>(timeout = 1.minutes) { event ->
-        if (event.name != "rank") return@listener
+private fun setupRankListener(jda: JDA, configuration: Configuration) = jda.onCommand("rank") { event ->
+    val guild = event.guild ?: return@onCommand
+    val member = event.member ?: return@onCommand
 
-        val guild = event.guild ?: return@listener
-        val member = event.member ?: return@listener
+    // Get the role instance for the requested rank
+    val type = event.getOption("role")?.asString ?: ""
+    val role = guild.getRoleById(jda.getRoleByType(configuration, type)) ?: return@onCommand
 
-        // Get the role instance for the requested rank
-        val type = event.getOption("role")?.asString ?: ""
-        val role = guild.getRoleById(jda.getRoleByType(configuration, type)) ?: return@listener
+    event.deferReply(true).queue() // This is required to handle delayed response
+    event.hook.setEphemeral(true) // Make messages only visible to command user
 
-        event.deferReply(true).queue() // This is required to handle delayed response
-        event.hook.setEphemeral(true) // Make messages only visible to command user
-
-        try {
-            val added = toggleRole(member, role)
-            event.hook.sendMessage(if (added) "Added the role" else "Removed the role").await()
-        } catch (ex: PermissionException) {
-            // If there is a permission issue, handle it by telling the user about the problem
-            event.hook.sendMessage(handlePermissionError(ex, role)).await()
-            log.error("Failed to add or remove role for a member. Member: {} ({}) Role: {} ({})",
-                      member.user.asTag, member.id, role.name, role.id, ex)
-        }
+    try {
+        val added = toggleRole(member, role)
+        event.hook.sendMessage(
+            if (added) "Added the role"
+            else       "Removed the role"
+        ).await()
+    } catch (ex: PermissionException) {
+        // If there is a permission issue, handle it by telling the user about the problem
+        event.hook.sendMessage(handlePermissionError(ex, role)).await()
+        log.error("Failed to add or remove role for a member. Member: {} ({}) Role: {} ({})",
+                  member.user.asTag, member.id, role.name, role.id, ex)
     }
 }
 

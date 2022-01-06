@@ -17,7 +17,10 @@
 package strumbot
 
 import dev.minn.jda.ktx.scope
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Guild
 import kotlin.time.Duration
@@ -48,10 +51,3 @@ inline fun JDA.repeatUntilShutdown(rate: Duration, initDelay: Duration = rate, c
         }
     }
 }
-
-inline fun <T : AutoCloseable, R> T.useCatching(fn: () -> R) = runCatching {
-    fn()
-}.also { close() }
-
-fun <T> CoroutineScope.defer(task: suspend CoroutineScope.() -> T) = async(start = CoroutineStart.LAZY, block = task)
-

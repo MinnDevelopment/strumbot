@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
     id("com.github.johnrengelman.shadow") version "7.1.1"
-    kotlin("jvm") version "1.6.0"
+    kotlin("jvm") version "1.6.10"
     application
 }
 
@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "1.2.0"
+version = "1.2.1-rc.4"
 
 repositories {
     mavenLocal() // caching optimization
@@ -22,13 +22,16 @@ repositories {
 }
 
 dependencies {
-    implementation("ch.qos.logback:logback-classic:1.2.8")
     implementation("net.dv8tion:JDA:4.+") {
         exclude(module="opus-java")
     }
+
     implementation("com.github.minndevelopment:jda-ktx:34b55c0")
+    implementation("ch.qos.logback:logback-classic:1.2.8")
+    implementation("com.squareup.okhttp3:okhttp:4.9.3")
+
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0")
     implementation(kotlin("stdlib-jdk8"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.0-RC2")
 }
 
 val clean by tasks
@@ -44,7 +47,8 @@ compileKotlin.kotlinOptions.apply {
     )
 }
 
-tasks.create<Copy>("install") {
+tasks.create<Copy>("release") {
+    group = "build"
     shadowJar.mustRunAfter(clean)
     dependsOn(shadowJar)
     dependsOn(clean)
@@ -52,7 +56,7 @@ tasks.create<Copy>("install") {
     from(shadowJar.archiveFile.get())
     from("src/scripts")
     from("example-config.json")
-    val output = "$buildDir/install/strumbot"
+    val output = "$buildDir/release/strumbot"
     into("$output/")
     doFirst { File(output).delete() }
     doLast {

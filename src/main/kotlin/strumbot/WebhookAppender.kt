@@ -50,6 +50,6 @@ class WebhookAppender : AppenderBase<LoggingEvent>() {
 
         client?.sendMessageEmbeds(embed)
               //?.setUsername("Error Log")
-              ?.queue()
+              ?.queue(null) { it.printStackTrace() }
     }
 }

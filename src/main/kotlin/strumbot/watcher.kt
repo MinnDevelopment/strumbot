@@ -17,7 +17,10 @@
 package strumbot
 
 import dev.minn.jda.ktx.*
-import kotlinx.coroutines.*
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Activity
 import net.dv8tion.jda.api.entities.WebhookClient
@@ -32,13 +35,11 @@ import java.net.UnknownHostException
 import java.time.Duration
 import java.time.OffsetDateTime
 import java.util.*
-import java.util.concurrent.CancellationException
 import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.seconds
 
 private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
 const val OFFLINE_DELAY = 2L * 60L // 2 minutes
-const val HOOK_NAME = "Stream Notifications"
 
 private val ignoredErrors = setOf<Class<*>>(
     SocketException::class.java,              // Issues on socket creation
@@ -151,10 +152,7 @@ class StreamWatcher(
                     offlineTimestamp = 0 // We can skip one offline event since we are currently live, and it might hickup
                     if (currentElement?.videoId == "") { // if twitch failed to provide a vod link, try updating it
                         val video = twitch.getVideoByStream(stream).getOrNull("video")
-
-                        video?.id?.let {
-                            currentElement?.videoId = it
-                        }
+                        currentElement?.videoId = video?.id ?: ""
                     }
                 }
             }
@@ -170,11 +168,11 @@ class StreamWatcher(
                 jda.scope.apply {
                     // Launch each getter in parallel
                     val getGame = async { twitch.getGame(stream).getOrNull("game") ?: EMPTY_GAME }
-                    val getVod = async { twitch.getVideoByStream(stream).getOrNull("video")?.id ?: "" }
+                    val getVod = async { twitch.getVideoByStream(stream).getOrNull("video") }
                     val getThumbnail = async { twitch.getThumbnail(stream).getOrNull("thumbnail") }
 
                     game = getGame.await()
-                    videoId = getVod.await()
+                    videoId = getVod.await()?.id ?: ""
                     thumbnail = getThumbnail.await()
                 }
 
@@ -207,17 +205,14 @@ class StreamWatcher(
         val firstSegment = timestamps.first()
         this.timestamps.clear()
 
-        val index = timestamps.asSequence()
-                              .map { it.toVodLink() }
-                              .fold(StringBuilder()) { a, b -> a.append('\n').append(b) }
+        val index = timestamps.fold(StringBuilder()) { a, b -> a.append('\n').append(b.toVodLink()) }
 
         // Find most recent video available, the streamer might delete a vod during the stream
         val video = timestamps
             .asReversed()
             .map { it.videoId }
             .filter { it.isNotEmpty() }
-            .map { twitch.getVideoById(it).await() }
-            .firstOrNull()
+            .firstNotNullOfOrNull { twitch.getVideoById(it).await() }
 
         val thumbnail = video?.let { twitch.getThumbnail(it).await() }
         val videoUrl = firstSegment.toVideoUrl()
@@ -231,21 +226,23 @@ class StreamWatcher(
             appendIndex(index)
             if (clips.isNotEmpty()) field {
                 inline = false
-                name = getText(language, "offline.clips")
+                name = text("offline.clips")
                 value = clips.asSequence()
                     .withIndex()
-                    .map { (i, it) ->
-                        val link = maskedLink(limit(it.title, 25) + " \uD83E\uDC55", it.url)
+                    .joinToString("\n") { (i, clip) ->
+                        val link = maskedLink(limit(clip.title, 25) + " \uD83E\uDC55", clip.url)
                         // <index> <Title> - <ViewCount> views
-                        "`${i + 1}.` $link \u2022 **${it.views}**\u00A0views"
+                        "`${i + 1}.` $link \u2022 **${clip.views}**\u00A0views"
                     }
-                    .joinToString("\n")
             }
         }
 
         withPing("vod") { mention ->
             val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
-            val content = "$mention ${getText(language, "offline.content", "name" to userLogin, "time" to duration)}"
+            val content = "$mention " + getText(language, "offline.content",
+                "name" to userLogin,
+                "time" to duration
+            )
             val message = Message(content = content, embed = embed.build())
             webhook.fireEvent("vod") {
                 sendMessage(message).apply {
@@ -265,10 +262,10 @@ class StreamWatcher(
         userId = stream.userId
 
         withPing("live") { mention ->
-            val content = "$mention ${getText(language, "live.content",
+            val content = "$mention " + getText(language, "live.content",
                 "name" to userLogin,
-                "game" to "**${game.name}**")
-            }"
+                "game" to "**${game.name}**"
+            )
             val embed = makeEmbed(language, stream, game, userLogin, null)
             val message = Message(content = content, embed = embed)
             webhook.fireEvent("live") {
@@ -290,15 +287,15 @@ class StreamWatcher(
         val thumbnail = twitch.getThumbnail(stream).await()
 
         withPing("update") { mention ->
-            val content = "$mention ${getText(language, "update.content",
+            val content = "$mention " + getText(language, "update.content",
                 "name" to userLogin,
-                "game" to "**${game.name}**")
-            }"
+                "game" to "**${game.name}**"
+            )
             val embed = makeEmbed(language, stream, game, userLogin, currentElement)
             val message = Message(content = content, embed = embed)
             webhook.fireEvent("update") {
                 sendMessage(message).apply {
-                    thumbnail?.let { addFile(thumbnail, "thumbnail.jpg") }
+                    thumbnail?.let { addFile(it, "thumbnail.jpg") }
                 }
             }
         }
@@ -350,18 +347,20 @@ class StreamWatcher(
                 // Add inline fields (3 per row)
                 field {
                     inline = true
-                    name = getText(language, "offline.timestamps")
+                    name = text("offline.timestamps")
                     value = chunk
                 }
             }
         } else {
             field {
                 inline = false
-                name = getText(language, "offline.timestamps")
+                name = text("offline.timestamps")
                 value = index.toString()
             }
         }
     }
+
+    private fun text(key: String) = language.getText(key)
 }
 
 private fun makeEmbedBase(title: String, url: String) = EmbedBuilder {
@@ -378,9 +377,9 @@ private fun makeEmbed(
     twitchName: String,
     currentSegment: StreamElement? = null
 ) = makeEmbedBase(stream.title, "https://www.twitch.tv/$twitchName").apply {
-    field(getText(language, "playing"), game.name)
+    field(language.getText("playing"), game.name)
     field(
-        name=getText(language, "started_at"),
+        name=language.getText("started_at"),
         value="<t:${stream.startedAt}:F>"
     )
     if (currentSegment != null) {

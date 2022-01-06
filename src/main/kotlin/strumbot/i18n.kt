@@ -42,12 +42,12 @@ val localizationManager: LocalizationManager = LocalizationManager()
 
 fun getLocale(stream: Stream): Locale = Locale.forLanguageTag(stream.language) ?: Locale.forLanguageTag("en")
 
-fun getText(locale: Locale, name: String): String {
-    return localizationManager.getText(locale, name)
+fun Locale.getText(name: String): String {
+    return localizationManager.getText(this, name)
 }
 
 fun getText(locale: Locale, name: String, tokens: Map<String, Any?>): String {
-    var template = getText(locale, name)
+    var template = locale.getText(name)
     tokens.forEach { (key, value) ->
         template = template.replace("{{$key}}", value.toString())
     }

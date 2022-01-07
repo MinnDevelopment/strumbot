@@ -68,6 +68,13 @@ tasks.create<Copy>("release") {
         archive.renameTo(File("$output/strumbot.jar"))
         val config = File("$output/example-config.json")
         config.renameTo(File("$output/config.json"))
+
+        File("containers/docker-compose.yml").let { file ->
+            file.writeText(file.readText()
+                .replace(Regex("(minnced/strumbot):.+?(-min)?\n"),
+                         "\$1:$version\$2\n")
+            )
+        }
     }
 }
 

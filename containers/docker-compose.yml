@@ -2,12 +2,12 @@ version: "2.2"
 
 services:
     strumbot-min:
-        image: minnced/strumbot:1.2.1-min
+        image: minnced/strumbot:1.2.1-ansi-min
         build:
             context: ..
             dockerfile: containers/minimal/Dockerfile
     strumbot:
-        image: minnced/strumbot:1.2.1
+        image: minnced/strumbot:1.2.1-ansi
         build:
             context: ..
             dockerfile: containers/normal/Dockerfile

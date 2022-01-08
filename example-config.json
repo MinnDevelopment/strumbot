@@ -6,6 +6,7 @@
     "token": "NjUzMjM1MjY5MzM1NjQ2MjA4.*******.*******",
     "stream_notifications": "https://discord.com/api/webhooks/*******/******",
     "logging": null,
+    "show_notify_hint": true,
     "role_name": {
       "live": "live",
       "vod": "vod",

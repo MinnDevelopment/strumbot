@@ -46,8 +46,8 @@ fun Locale.getText(name: String): String {
     return localizationManager.getText(this, name)
 }
 
-fun getText(locale: Locale, name: String, tokens: Map<String, Any?>): String {
-    var template = locale.getText(name)
+fun Locale.getText(name: String, tokens: Map<String, Any?>): String {
+    var template = getText(name)
     tokens.forEach { (key, value) ->
         template = template.replace("{{$key}}", value.toString())
     }
@@ -55,6 +55,6 @@ fun getText(locale: Locale, name: String, tokens: Map<String, Any?>): String {
     return template
 }
 
-fun getText(locale: Locale, name: String, vararg tokens: Pair<String, Any?>): String {
-    return getText(locale, name, mapOf(*tokens))
+fun Locale.getText(name: String, vararg tokens: Pair<String, Any?>): String {
+    return getText(name, mapOf(*tokens))
 }

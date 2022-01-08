@@ -188,7 +188,7 @@ private fun CoroutineEventManager.initCommands(configuration: Configuration) = l
 
     if (!filterId(guild, configuration.guildId)) return@listener
 
-    guild.upsertCommand("rank", "Add or remove one of the notification roles") {
+    guild.upsertCommand("notify", "Add or remove one of the notification roles") {
         option<String>("role", "The role to assign or remove you from", required = true) {
             configuration.ranks.forEach { (_, value) ->
                 choice(value, value)
@@ -200,7 +200,7 @@ private fun CoroutineEventManager.initCommands(configuration: Configuration) = l
 /**
  * Handles the rank command
  */
-private fun setupRankListener(jda: JDA, configuration: Configuration) = jda.onCommand("rank") { event ->
+private fun setupRankListener(jda: JDA, configuration: Configuration) = jda.onCommand("notify") { event ->
     val guild = event.guild ?: return@onCommand
     val member = event.member ?: return@onCommand
 

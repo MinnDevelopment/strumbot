@@ -44,11 +44,12 @@ If you don't know how to create a discord bot and get access to the token: [How 
 - `role_name` Configuration of `type`->`role` to change the default names of the update roles
 - `enabled_events` Array of events to publish to the `stream_notifications` webhook
 - `logging` Optional webhook URL for errors and warnings printed at runtime (omit or null to disable)
+- `show_nofity_hint` Whether to show a hint in the embed footer about the `/notify` command
 
-The roles used for updates can be managed by the bot with the `/rank role: <type>` command.
+The roles used for updates can be managed by the bot with the `/notify role: <type>` command.
 This command will automatically assign the role to the user.
 
-For example, with the configuration `"live": "Stream is Live"` the bot will accept the command `/rank role: live` and assign/remove the role `Stream is Live` for the user.
+For example, with the configuration `"live": "Stream is Live"` the bot will accept the command `/notify role: live` and assign/remove the role `Stream is Live` for the user.
 These commands are *ephemeral*, which means they only show up to the user who invokes them. This way you can use them anywhere without having any clutter in chat!
 
 ![rank-joining.gif][rank-joining]

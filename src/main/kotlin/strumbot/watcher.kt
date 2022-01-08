@@ -222,7 +222,8 @@ class StreamWatcher(
         else
             emptyList()
 
-        val embed = makeEmbedBase(video?.title ?: "<Video Removed>", videoUrl).apply {
+        val rankName = configuration.ranks["vod"].takeIf { configuration.notifyHint }
+        val embed = makeEmbedBase(video?.title ?: "<Video Removed>", videoUrl, rankName).apply {
             appendIndex(index)
             if (clips.isNotEmpty()) field {
                 inline = false
@@ -239,7 +240,7 @@ class StreamWatcher(
 
         withPing("vod") { mention ->
             val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
-            val content = "$mention " + getText(language, "offline.content",
+            val content = "$mention " + text("offline.content",
                 "name" to userLogin,
                 "time" to duration
             )
@@ -262,11 +263,14 @@ class StreamWatcher(
         userId = stream.userId
 
         withPing("live") { mention ->
-            val content = "$mention " + getText(language, "live.content",
+            val content = "$mention " + text("live.content",
                 "name" to userLogin,
                 "game" to "**${game.name}**"
             )
-            val embed = makeEmbed(language, stream, game, userLogin, null)
+
+            val rankName = configuration.ranks["live"].takeIf { configuration.notifyHint }
+            val embed = makeEmbed(stream, game, userLogin, rankName, null)
+
             val message = Message(content = content, embed = embed)
             webhook.fireEvent("live") {
                 sendMessage(message).apply {
@@ -287,11 +291,14 @@ class StreamWatcher(
         val thumbnail = twitch.getThumbnail(stream).await()
 
         withPing("update") { mention ->
-            val content = "$mention " + getText(language, "update.content",
+            val content = "$mention " + text("update.content",
                 "name" to userLogin,
                 "game" to "**${game.name}**"
             )
-            val embed = makeEmbed(language, stream, game, userLogin, currentElement)
+
+            val rankName = configuration.ranks["update"].takeIf { configuration.notifyHint }
+            val embed = makeEmbed(stream, game, userLogin, rankName, currentElement)
+
             val message = Message(content = content, embed = embed)
             webhook.fireEvent("update") {
                 sendMessage(message).apply {
@@ -361,31 +368,35 @@ class StreamWatcher(
     }
 
     private fun text(key: String) = language.getText(key)
-}
+    private fun text(key: String, vararg tokens: Pair<String, String>) = language.getText(key, *tokens)
 
-private fun makeEmbedBase(title: String, url: String) = EmbedBuilder {
-    color = 0x6441A4
-    image = "attachment://thumbnail.jpg"
-    this.title = url
-    author(title)
-}
-
-private fun makeEmbed(
-    language: Locale,
-    stream: Stream,
-    game: Game,
-    twitchName: String,
-    currentSegment: StreamElement? = null
-) = makeEmbedBase(stream.title, "https://www.twitch.tv/$twitchName").apply {
-    field(language.getText("playing"), game.name)
-    field(
-        name=language.getText("started_at"),
-        value="<t:${stream.startedAt}:F>"
-    )
-    if (currentSegment != null) {
-        description = "Start watching at ${currentSegment.toVodLink("")}"
+    private fun makeEmbedBase(title: String, url: String, rankName: String?) = EmbedBuilder {
+        color = 0x6441A4
+        image = "attachment://thumbnail.jpg"
+        this.title = url
+        author(title)
+        rankName?.let {
+            footer(text("notify.hint", "rank" to "/notify role: $rankName"))
+        }
     }
-}.build()
+
+    private fun makeEmbed(
+        stream: Stream,
+        game: Game,
+        twitchName: String,
+        rankName: String?,
+        currentSegment: StreamElement? = null,
+    ) = makeEmbedBase(stream.title, "https://www.twitch.tv/$twitchName", rankName).apply {
+        field(text("playing"), game.name)
+        field(
+            name=text("started_at"),
+            value="<t:${stream.startedAt}:F>"
+        )
+        if (currentSegment != null) {
+            description = "Start watching at ${currentSegment.toVodLink("")}"
+        }
+    }.build()
+}
 
 private fun limit(input: String, limit: Int): String {
     if (input.length <= limit)

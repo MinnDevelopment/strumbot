@@ -32,6 +32,7 @@ data class Configuration(
     val logging: String?,
     val guildId: Long,
     val topClips: Int,
+    val notifyHint: Boolean,
     val logPattern: String?,
     val logLevel: String?,
     val ranks: Map<String, String>,
@@ -79,6 +80,7 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
         discord.getString("logging", null),
         discord.getLong("server_id", 0L),
         min(5, max(0, twitch.getInt("top_clips", 0))),
+        discord.getBoolean("show_notify_hint", false),
         logging.getString("pattern", null),
         logging.getString("level", null),
         roles, events, userLogin

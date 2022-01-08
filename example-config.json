@@ -1,4 +1,7 @@
 {
+  "logger": {
+    "level": "info"
+  },
   "discord": {
     "token": "NjUzMjM1MjY5MzM1NjQ2MjA4.*******.*******",
     "stream_notifications": "https://discord.com/api/webhooks/*******/******",

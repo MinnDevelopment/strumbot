@@ -28,6 +28,7 @@ import net.dv8tion.jda.api.entities.WebhookClient
 
 class WebhookAppender : AppenderBase<LoggingEvent>() {
     companion object {
+        lateinit var instance: WebhookAppender
         private var client: WebhookClient<*>? = null
         private val buffer = StringBuilder(2000)
 
@@ -58,6 +59,7 @@ class WebhookAppender : AppenderBase<LoggingEvent>() {
         if (!::encoder.isInitialized)
             throw AssertionError("Missing pattern encoder")
 
+        instance = this
         encoder.start()
         super.start()
     }

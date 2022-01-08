@@ -7,6 +7,7 @@
 [ ![docker-pulls](https://img.shields.io/docker/pulls/minnced/strumbot?logo=docker&logoColor=white) ](https://hub.docker.com/r/minnced/strumbot)
 [ ![](https://img.shields.io/docker/image-size/minnced/strumbot/1.2.1-min?logo=docker&logoColor=white) ](https://hub.docker.com/layers/minnced/strumbot/1.2.1-min/images/sha256-ae0be2258978801624751c854676f92158deb69311b38194b1d0a9ceedf255d4)
 [ ![release](https://img.shields.io/github/v/tag/minndevelopment/strumbot) ](https://github.com/MinnDevelopment/strumbot/releases/latest)
+
 # Strumbot
 
 A Twitch Stream Notification Bot. This will send notifications to a webhook in your Discord server when the subscribed streamer goes live or changes their game.
@@ -20,6 +21,16 @@ A Twitch Stream Notification Bot. This will send notifications to a webhook in y
 
 The configuration file must be called `config.json` and has to be in the working directory. An example configuration can be found in [`example-config.json`][example-config].
 Anything marked with **(optional)** can be set to `null` to be disabled.
+
+### Logger
+
+In this section you can configure some custom logging pattern and the minimum logging level to show in your Discord Webhook.
+By default, this will only log for messages with level WARN or ERROR.
+
+- `level` The severity level at which to start logging (INFO > WARN > ERROR)
+- `pattern` The custom logback pattern to use
+
+The webhook URL is configured in `discord.logging` below.
 
 ### Discord
 

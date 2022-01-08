@@ -17,6 +17,7 @@
 @file:JvmName("Main")
 package strumbot
 
+import ch.qos.logback.classic.PatternLayout
 import dev.minn.jda.ktx.CoroutineEventManager
 import dev.minn.jda.ktx.await
 import dev.minn.jda.ktx.interactions.choice
@@ -109,8 +110,17 @@ fun main() {
         setRateLimitPool(pool)
     }
 
-    configuration.logging?.let {
-        WebhookAppender.init(jda, it, scope)
+    configuration.logging?.let { cfg ->
+        configuration.logLevel?.let {
+            WebhookAppender.instance.level = it
+        }
+        configuration.logPattern?.let {
+            val layout = WebhookAppender.instance.encoder.layout as PatternLayout
+            layout.pattern = it
+            layout.start()
+        }
+
+        WebhookAppender.init(jda, cfg, scope)
     }
 
     // Cycling streaming status

@@ -32,6 +32,8 @@ data class Configuration(
     val logging: String?,
     val guildId: Long,
     val topClips: Int,
+    val logPattern: String?,
+    val logLevel: String?,
     val ranks: Map<String, String>,
     val events: Set<String>,
     val twitchUser: Set<String>
@@ -66,6 +68,9 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
                     else
                         setOf(twitch.getString("user_login"))
 
+    val logging = json.optObject("logger").orElseGet(DataObject::empty)
+
+
     return Configuration(
         discord.getString("token"),
         twitch.getString("client_id"),
@@ -74,6 +79,8 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
         discord.getString("logging", null),
         discord.getLong("server_id", 0L),
         min(5, max(0, twitch.getInt("top_clips", 0))),
+        logging.getString("pattern", null),
+        logging.getString("level", null),
         roles, events, userLogin
     )
 }

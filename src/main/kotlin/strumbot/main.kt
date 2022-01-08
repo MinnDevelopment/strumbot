@@ -110,7 +110,7 @@ fun main() {
     }
 
     configuration.logging?.let {
-        WebhookAppender.init(jda, it)
+        WebhookAppender.init(jda, it, scope)
     }
 
     // Cycling streaming status

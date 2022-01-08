@@ -9,8 +9,9 @@
     </appender>
 
     <appender name="WEBHOOK" class="strumbot.WebhookAppender">
+        <level>warn</level>
         <encoder>
-            <pattern>%boldCyan(%thread) %boldGreen(%logger{0}) %highlight(%level)\n%msg%n</pattern>
+            <pattern>%boldWhite(%d{HH:mm:ss.SSS}) %boldCyan(%thread) %boldGreen(%logger{0}) %highlight(%level)\n%msg%n</pattern>
         </encoder>
     </appender>
 

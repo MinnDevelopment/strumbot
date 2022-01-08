@@ -196,8 +196,8 @@ private fun CoroutineEventManager.initCommands(configuration: Configuration) = l
                     choice(value, value)
                 }
             }
-        }.queue()
-    }
+        }
+    }.queue()
 }
 
 /**

@@ -21,8 +21,9 @@ import ch.qos.logback.classic.PatternLayout
 import dev.minn.jda.ktx.CoroutineEventManager
 import dev.minn.jda.ktx.await
 import dev.minn.jda.ktx.interactions.choice
+import dev.minn.jda.ktx.interactions.command
 import dev.minn.jda.ktx.interactions.option
-import dev.minn.jda.ktx.interactions.upsertCommand
+import dev.minn.jda.ktx.interactions.updateCommands
 import dev.minn.jda.ktx.light
 import dev.minn.jda.ktx.onCommand
 import kotlinx.coroutines.*
@@ -188,13 +189,15 @@ private fun CoroutineEventManager.initCommands(configuration: Configuration) = l
 
     if (!filterId(guild, configuration.guildId)) return@listener
 
-    guild.upsertCommand("notify", "Add or remove one of the notification roles") {
-        option<String>("role", "The role to assign or remove you from", required = true) {
-            configuration.ranks.forEach { (_, value) ->
-                choice(value, value)
+    guild.updateCommands {
+        command("notify", "Add or remove one of the notification roles") {
+            option<String>("role", "The role to assign or remove you from", required = true) {
+                configuration.ranks.forEach { (_, value) ->
+                    choice(value, value)
+                }
             }
-        }
-    }.queue()
+        }.queue()
+    }
 }
 
 /**

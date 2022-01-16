@@ -17,8 +17,10 @@
 package strumbot
 
 import net.dv8tion.jda.api.JDA
+import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.Webhook
 import net.dv8tion.jda.api.entities.WebhookClient
+import net.dv8tion.jda.internal.JDAImpl
 import net.dv8tion.jda.internal.entities.AbstractWebhookClient
 import net.dv8tion.jda.internal.requests.Route
 import net.dv8tion.jda.internal.requests.restaction.WebhookMessageActionImpl
@@ -29,14 +31,18 @@ fun String.asWebhook(api: JDA)  = Webhook.WEBHOOK_URL.matcher(this).apply(Matche
     WebhookService(api, group("id").toLong(), group("token"))
 }
 
-class WebhookService(api: JDA, id: Long, token: String) : WebhookClient<Void>, AbstractWebhookClient<Void>(id, token, api) {
-    override fun sendRequest(): WebhookMessageActionImpl<Void> {
+class WebhookService(api: JDA, id: Long, token: String) : WebhookClient<Message>, AbstractWebhookClient<Message>(id, token, api) {
+    override fun sendRequest(): WebhookMessageActionImpl<Message> {
         val route = Route.Webhooks.EXECUTE_WEBHOOK.compile(id.toString(), token).run { withQueryParams("wait", "true") }
-        return WebhookMessageActionImpl<Void>(api, null, route) { null }.apply { run() }
+        return WebhookMessageActionImpl(api, null, route) {
+            (api as JDAImpl).entityBuilder.createMessage(it)
+        }.apply { run() }
     }
 
-    override fun editRequest(messageId: String?): WebhookMessageUpdateActionImpl<Void> {
+    override fun editRequest(messageId: String?): WebhookMessageUpdateActionImpl<Message> {
         val route = Route.Webhooks.EXECUTE_WEBHOOK_EDIT.compile(id.toString(), token).run { withQueryParams("wait", "true") }
-        return WebhookMessageUpdateActionImpl<Void>(api, route) { null }.apply { run() }
+        return WebhookMessageUpdateActionImpl(api, route) {
+            (api as JDAImpl).entityBuilder.createMessage(it)
+        }.apply { run() }
     }
 }

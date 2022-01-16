@@ -23,9 +23,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Activity
+import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.WebhookClient
 import net.dv8tion.jda.api.requests.RestAction
 import net.dv8tion.jda.api.utils.MarkdownUtil.maskedLink
+import net.dv8tion.jda.api.utils.TimeFormat.DATE_TIME_LONG
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.InputStream
@@ -117,18 +119,20 @@ suspend fun <T> Deferred<T>.getOrNull(comment: String) = try {
 class StreamWatcher(
     private val twitch: TwitchApi,
     private val jda: JDA,
-    private val configuration: Configuration,
+    private val config: Configuration,
     private val userLogin: String,
     private val activityService: ActivityService
 ) {
-    @Volatile private var currentElement: StreamElement? = null
+    @Volatile
+    private var currentElement: StreamElement? = null
+
     private var offlineTimestamp = 0L
     private var streamStarted = 0L
     private var currentActivity: Activity? = null
     private var userId: String = ""
     private var language: Locale = Locale.forLanguageTag("en")
     private val timestamps: MutableList<StreamElement> = mutableListOf()
-    private val webhook: WebhookClient<*> = configuration.streamNotifications.asWebhook(jda)
+    private val webhook: WebhookClient<Message> = config.discord.notifications.asWebhook(jda)
 
     fun handle(stream: Stream?) = jda.scope.async {
         // There are 4 states we can process
@@ -217,12 +221,12 @@ class StreamWatcher(
         val thumbnail = video?.let { twitch.getThumbnail(it).await() }
         val videoUrl = firstSegment.toVideoUrl()
 
-        val clips = if (configuration.topClips > 0)
-            twitch.getTopClips(userId, streamStarted, configuration.topClips).await() ?: emptyList()
+        val clips = if (config.twitch.topClips > 0)
+            twitch.getTopClips(userId, streamStarted, config.twitch.topClips).await() ?: emptyList()
         else
             emptyList()
 
-        val rankName = configuration.ranks["vod"].takeIf { configuration.notifyHint }
+        val rankName = config.discord.ranks["vod"].takeIf { config.discord.notifyHint }
         val embed = makeEmbedBase(video?.title ?: "<Video Removed>", videoUrl, rankName).apply {
             appendIndex(index)
             if (clips.isNotEmpty()) field {
@@ -268,7 +272,7 @@ class StreamWatcher(
                 "game" to "**${game.name}**"
             )
 
-            val rankName = configuration.ranks["live"].takeIf { configuration.notifyHint }
+            val rankName = config.discord.ranks["live"].takeIf { config.discord.notifyHint }
             val embed = makeEmbed(stream, game, userLogin, rankName, null)
 
             val message = Message(content = content, embed = embed)
@@ -296,7 +300,7 @@ class StreamWatcher(
                 "game" to "**${game.name}**"
             )
 
-            val rankName = configuration.ranks["update"].takeIf { configuration.notifyHint }
+            val rankName = config.discord.ranks["update"].takeIf { config.discord.notifyHint }
             val embed = makeEmbed(stream, game, userLogin, rankName, currentElement)
 
             val message = Message(content = content, embed = embed)
@@ -312,13 +316,13 @@ class StreamWatcher(
 
     // Run callback with mentionable role
     private inline fun <T> withPing(type: String, block: (String) -> T): T {
-        val roleId = jda.getRoleByType(configuration, type)
+        val roleId = jda.getRoleByType(config.discord, type)
         return block("<@&$roleId>")
     }
 
     // Fire webhook event if enabled in the configuration
-    private suspend inline fun <T> WebhookClient<*>.fireEvent(type: String, crossinline block: WebhookClient<*>.() -> RestAction<T>): T? {
-        return if (type in configuration.events) {
+    private suspend inline fun <T> WebhookClient<Message>.fireEvent(type: String, crossinline block: WebhookClient<Message>.() -> RestAction<T>): T? {
+        return if (type in config.discord.events) {
             block(this).await()
         } else {
             null
@@ -390,7 +394,7 @@ class StreamWatcher(
         field(text("playing"), game.name)
         field(
             name=text("started_at"),
-            value="<t:${stream.startedAt}:F>"
+            value= DATE_TIME_LONG.format(stream.startedAt * 1000)
         )
         if (currentSegment != null) {
             description = "Start watching at ${currentSegment.toVodLink("")}"

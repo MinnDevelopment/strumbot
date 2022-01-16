@@ -16,6 +16,7 @@
   },
   "twitch": {
     "top_clips": 5,
+    "offline_grace_period": 2,
     "client_id": "*******",
     "client_secret": "*******",
     "user_login": ["Elajjaz"]

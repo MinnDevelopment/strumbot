@@ -33,6 +33,8 @@ data class TwitchConfig(
     val userNames: Set<String>,
     /** How many top clips to show in the VOD event (0-5) */
     val topClips: Int,
+    /** How many minutes of grace period to apply before firing VOD events (allows for stream outage) */
+    val offlineThreshold: Int,
 )
 
 data class DiscordConfig(
@@ -110,6 +112,7 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
         twitch.getString("client_secret"),
         userLogin,
         min(5, max(0, twitch.getInt("top_clips", 0))),
+        max(0, twitch.getInt("offline_grace_period", 2))
     )
 
     val loggingConfig = LoggerConfig(

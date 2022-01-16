@@ -41,7 +41,6 @@ import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.seconds
 
 private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
-const val OFFLINE_DELAY = 2L * 60L // 2 minutes
 
 private val ignoredErrors = setOf<Class<*>>(
     SocketException::class.java,              // Issues on socket creation
@@ -197,7 +196,7 @@ class StreamWatcher(
         if (offlineTimestamp == 0L) {
             offlineTimestamp = OffsetDateTime.now().toEpochSecond()
             return
-        } else if (OffsetDateTime.now().toEpochSecond() - offlineTimestamp < OFFLINE_DELAY) {
+        } else if (OffsetDateTime.now().toEpochSecond() - offlineTimestamp < (config.twitch.offlineThreshold * 60L)) {
             return
         }
 

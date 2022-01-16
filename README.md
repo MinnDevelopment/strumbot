@@ -69,10 +69,13 @@ This configuration section contains required information to track the stream sta
 
 If you don't know how to make a twitch application and access the client_id: [How to make a twitch app](https://github.com/MinnDevelopment/strumbot/blob/master/guides/HOW_TO_CREATE_A_TWITCH_APP.md)
 
+- `offline_grace_period` Minutes to wait before firing a VOD event after channel appears offline (Default: 2)
 - `top_clips` The maximum number of top clips to show in the vod event (0 <= x <= 5)
 - `client_id` The twitch application's client_id
 - `client_secret` The twitch application's client_secret
 - `user_login` The username of the tracked streamer
+
+The `offline_grace_period` is an engineering parameter which is helpful to handle cases where streams temporarily appear offline due to outages or otherwise unwanted connection issues.
 
 ### Example
 
@@ -91,6 +94,7 @@ If you don't know how to make a twitch application and access the client_id: [Ho
   },
   "twitch": {
     "top_clips": 5,
+    "offline_grace_period": 2,
     "client_id": "*******",
     "client_secret": "*******",
     "user_login": ["Elajjaz", "Distortion2"]

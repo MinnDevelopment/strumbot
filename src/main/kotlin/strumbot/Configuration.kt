@@ -24,17 +24,47 @@ import java.io.FileNotFoundException
 import kotlin.math.max
 import kotlin.math.min
 
-data class Configuration(
-    val token: String,
-    val twitchClientId: String,
-    val twitchClientSecret: String,
-    val streamNotifications: String,
-    val logging: String?,
-    val guildId: Long,
+data class TwitchConfig(
+    /** Client ID of twitch application */
+    val clientId: String,
+    /** Client secret of twitch application */
+    val clientSecret: String,
+    /** The twitch streamer names to keep track off */
+    val userNames: Set<String>,
+    /** How many top clips to show in the VOD event (0-5) */
     val topClips: Int,
+    /** How many minutes of grace period to apply before firing VOD events (allows for stream outage) */
+    val offlineThreshold: Int,
+)
+
+data class DiscordConfig(
+    /** The discord bot token used to handle role assignments */
+    val token: String,
+    /** Logger webhook URL */
+    val logging: String?,
+    /** The webhook url used for stream notifications */
+    val notifications: String,
+    /** Whether to add a footer to stream notifications with command hints */
+    val notifyHint: Boolean,
+    /** The guild in which to handle commands */
+    val guildId: Long,
+    /** The role names used for notification mentions */
     val ranks: Map<String, String>,
+    /** Which events to enable for notifications */
     val events: Set<String>,
-    val twitchUser: Set<String>
+)
+
+data class LoggerConfig(
+    /** The logging level used for webhook logging */
+    val level: String?,
+    /** The logging pattern for webhook logging */
+    val pattern: String?,
+)
+
+data class Configuration(
+    val discord: DiscordConfig,
+    val twitch: TwitchConfig,
+    val logger: LoggerConfig
 )
 
 private val log = LoggerFactory.getLogger(Configuration::class.java)
@@ -66,14 +96,29 @@ fun loadConfiguration(path: String, fallback: String = "/etc/strumbot/config.jso
                     else
                         setOf(twitch.getString("user_login"))
 
-    return Configuration(
+    val logging = json.optObject("logger").orElseGet(DataObject::empty)
+
+    val discordConfig = DiscordConfig(
         discord.getString("token"),
+        discord.getString("logging", null),
+        discord.getString("stream_notifications"),
+        discord.getBoolean("show_notify_hints", false),
+        discord.getUnsignedLong("server_id", 0L),
+        roles, events
+    )
+
+    val twitchConfig = TwitchConfig(
         twitch.getString("client_id"),
         twitch.getString("client_secret"),
-        discord.getString("stream_notifications"),
-        discord.getString("logging", null),
-        discord.getLong("server_id", 0L),
+        userLogin,
         min(5, max(0, twitch.getInt("top_clips", 0))),
-        roles, events, userLogin
+        max(0, twitch.getInt("offline_grace_period", 2))
     )
+
+    val loggingConfig = LoggerConfig(
+        logging.getString("level", null),
+        logging.getString("pattern", null),
+    )
+
+    return Configuration(discordConfig, twitchConfig, loggingConfig)
 }

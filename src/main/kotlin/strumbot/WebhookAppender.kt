@@ -17,39 +17,59 @@
 package strumbot
 
 import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.encoder.PatternLayoutEncoder
 import ch.qos.logback.classic.spi.LoggingEvent
 import ch.qos.logback.core.AppenderBase
-import dev.minn.jda.ktx.Embed
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.WebhookClient
-import java.time.Instant
 
 class WebhookAppender : AppenderBase<LoggingEvent>() {
     companion object {
+        lateinit var instance: WebhookAppender
         private var client: WebhookClient<*>? = null
+        private val buffer = StringBuilder(2000)
 
-        fun init(api: JDA, url: String) {
+        fun init(api: JDA, url: String, scope: CoroutineScope) {
             client = url.asWebhook(api)
+            scope.launch {
+                while (true) {
+                    delay(500)
+                    send()
+                }
+            }
+        }
+
+        fun send() = synchronized(buffer) {
+            if (buffer.isEmpty()) return@synchronized
+            val message = "```ansi\n${buffer}\n```"
+            buffer.setLength(0)
+            client?.sendMessage(message)?.queue(null) { it.printStackTrace() }
         }
     }
 
-    override fun append(eventObject: LoggingEvent?) {
-        if (eventObject == null || !eventObject.level.isGreaterOrEqual(Level.WARN)) return
-        val embed = Embed {
-            description = eventObject.formattedMessage
-            eventObject.throwableProxy?.let {
-                description += "```\n${it.className}: ${it.message}\n```"
-            }
-            when (eventObject.level.toInt()) {
-                Level.ERROR_INT -> color = 0xFF0000
-                Level.WARN_INT -> color = 0xF8F8FF
-            }
+    var level: String? = null
+    lateinit var encoder: PatternLayoutEncoder
 
-            timestamp = Instant.ofEpochMilli(eventObject.timeStamp)
+    private val minLevel: Level get() = Level.toLevel(level ?: "warn")
+
+    override fun start() {
+        if (!::encoder.isInitialized)
+            throw AssertionError("Missing pattern encoder")
+
+        instance = this
+        encoder.start()
+        super.start()
+    }
+
+    override fun append(event: LoggingEvent) {
+        if (!event.level.isGreaterOrEqual(minLevel)) return
+        synchronized(buffer) {
+            buffer.append(encoder.encode(event).toString(Charsets.UTF_8).take(1500))
+            if (buffer.length > 1000)
+                send()
         }
-
-        client?.sendMessageEmbeds(embed)
-              //?.setUsername("Error Log")
-              ?.queue(null) { it.printStackTrace() }
     }
 }

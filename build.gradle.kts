@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "1.2.1"
+version = "1.3.0"
 
 repositories {
     mavenLocal() // caching optimization
@@ -47,6 +47,17 @@ compileKotlin.kotlinOptions.apply {
     )
 }
 
+build.dependsOn(shadowJar)
+
+fun setupScript(path: String) {
+    val file = File(path)
+    file.writeText(file.readText()
+        .replace("%NAME%", "strumbot.jar")
+        .replace("%VERSION%", version.toString()))
+    file.setExecutable(true)
+    file.setReadable(true)
+}
+
 tasks.create<Copy>("release") {
     group = "build"
     shadowJar.mustRunAfter(clean)
@@ -76,15 +87,4 @@ tasks.create<Copy>("release") {
             )
         }
     }
-}
-
-build.dependsOn(shadowJar)
-
-fun setupScript(path: String) {
-    val file = File(path)
-    file.writeText(file.readText()
-        .replace("%NAME%", "strumbot.jar")
-        .replace("%VERSION%", version.toString()))
-    file.setExecutable(true)
-    file.setReadable(true)
 }

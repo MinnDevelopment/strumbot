@@ -7,6 +7,7 @@
 [ ![docker-pulls](https://img.shields.io/docker/pulls/minnced/strumbot?logo=docker&logoColor=white) ](https://hub.docker.com/r/minnced/strumbot)
 [ ![](https://img.shields.io/docker/image-size/minnced/strumbot/1.2.1-min?logo=docker&logoColor=white) ](https://hub.docker.com/layers/minnced/strumbot/1.2.1-min/images/sha256-ae0be2258978801624751c854676f92158deb69311b38194b1d0a9ceedf255d4)
 [ ![release](https://img.shields.io/github/v/tag/minndevelopment/strumbot) ](https://github.com/MinnDevelopment/strumbot/releases/latest)
+
 # Strumbot
 
 A Twitch Stream Notification Bot. This will send notifications to a webhook in your Discord server when the subscribed streamer goes live or changes their game.
@@ -21,6 +22,16 @@ A Twitch Stream Notification Bot. This will send notifications to a webhook in y
 The configuration file must be called `config.json` and has to be in the working directory. An example configuration can be found in [`example-config.json`][example-config].
 Anything marked with **(optional)** can be set to `null` to be disabled.
 
+### Logger
+
+In this section you can configure some custom logging pattern and the minimum logging level to show in your Discord Webhook.
+By default, this will only log for messages with level WARN or ERROR.
+
+- `level` The severity level at which to start logging (INFO > WARN > ERROR)
+- `pattern` The custom logback pattern to use
+
+The webhook URL is configured in `discord.logging` below.
+
 ### Discord
 
 This section of the configuration contains settings for the discord side of the bot such as role names and webhook URLs.
@@ -33,11 +44,12 @@ If you don't know how to create a discord bot and get access to the token: [How 
 - `role_name` Configuration of `type`->`role` to change the default names of the update roles
 - `enabled_events` Array of events to publish to the `stream_notifications` webhook
 - `logging` Optional webhook URL for errors and warnings printed at runtime (omit or null to disable)
+- `show_nofity_hint` Whether to show a hint in the embed footer about the `/notify` command
 
-The roles used for updates can be managed by the bot with the `/rank role: <type>` command.
+The roles used for updates can be managed by the bot with the `/notify role: <type>` command.
 This command will automatically assign the role to the user.
 
-For example, with the configuration `"live": "Stream is Live"` the bot will accept the command `/rank role: live` and assign/remove the role `Stream is Live` for the user.
+For example, with the configuration `"live": "Stream is Live"` the bot will accept the command `/notify role: live` and assign/remove the role `Stream is Live` for the user.
 These commands are *ephemeral*, which means they only show up to the user who invokes them. This way you can use them anywhere without having any clutter in chat!
 
 ![rank-joining.gif][rank-joining]
@@ -57,10 +69,13 @@ This configuration section contains required information to track the stream sta
 
 If you don't know how to make a twitch application and access the client_id: [How to make a twitch app](https://github.com/MinnDevelopment/strumbot/blob/master/guides/HOW_TO_CREATE_A_TWITCH_APP.md)
 
+- `offline_grace_period` Minutes to wait before firing a VOD event after channel appears offline (Default: 2)
 - `top_clips` The maximum number of top clips to show in the vod event (0 <= x <= 5)
 - `client_id` The twitch application's client_id
 - `client_secret` The twitch application's client_secret
 - `user_login` The username of the tracked streamer
+
+The `offline_grace_period` is an engineering parameter which is helpful to handle cases where streams temporarily appear offline due to outages or otherwise unwanted connection issues.
 
 ### Example
 
@@ -79,6 +94,7 @@ If you don't know how to make a twitch application and access the client_id: [Ho
   },
   "twitch": {
     "top_clips": 5,
+    "offline_grace_period": 2,
     "client_id": "*******",
     "client_secret": "*******",
     "user_login": ["Elajjaz", "Distortion2"]

@@ -23,9 +23,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import net.dv8tion.jda.api.JDA
 import net.dv8tion.jda.api.entities.Activity
+import net.dv8tion.jda.api.entities.Message
 import net.dv8tion.jda.api.entities.WebhookClient
 import net.dv8tion.jda.api.requests.RestAction
 import net.dv8tion.jda.api.utils.MarkdownUtil.maskedLink
+import net.dv8tion.jda.api.utils.TimeFormat.DATE_TIME_LONG
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.InputStream
@@ -39,7 +41,6 @@ import kotlin.time.Duration.Companion.ZERO
 import kotlin.time.Duration.Companion.seconds
 
 private val log = LoggerFactory.getLogger(StreamWatcher::class.java) as Logger
-const val OFFLINE_DELAY = 2L * 60L // 2 minutes
 
 private val ignoredErrors = setOf<Class<*>>(
     SocketException::class.java,              // Issues on socket creation
@@ -117,18 +118,20 @@ suspend fun <T> Deferred<T>.getOrNull(comment: String) = try {
 class StreamWatcher(
     private val twitch: TwitchApi,
     private val jda: JDA,
-    private val configuration: Configuration,
+    private val config: Configuration,
     private val userLogin: String,
     private val activityService: ActivityService
 ) {
-    @Volatile private var currentElement: StreamElement? = null
+    @Volatile
+    private var currentElement: StreamElement? = null
+
     private var offlineTimestamp = 0L
     private var streamStarted = 0L
     private var currentActivity: Activity? = null
     private var userId: String = ""
     private var language: Locale = Locale.forLanguageTag("en")
     private val timestamps: MutableList<StreamElement> = mutableListOf()
-    private val webhook: WebhookClient<*> = configuration.streamNotifications.asWebhook(jda)
+    private val webhook: WebhookClient<Message> = config.discord.notifications.asWebhook(jda)
 
     fun handle(stream: Stream?) = jda.scope.async {
         // There are 4 states we can process
@@ -193,7 +196,7 @@ class StreamWatcher(
         if (offlineTimestamp == 0L) {
             offlineTimestamp = OffsetDateTime.now().toEpochSecond()
             return
-        } else if (OffsetDateTime.now().toEpochSecond() - offlineTimestamp < OFFLINE_DELAY) {
+        } else if (OffsetDateTime.now().toEpochSecond() - offlineTimestamp < (config.twitch.offlineThreshold * 60L)) {
             return
         }
 
@@ -217,12 +220,13 @@ class StreamWatcher(
         val thumbnail = video?.let { twitch.getThumbnail(it).await() }
         val videoUrl = firstSegment.toVideoUrl()
 
-        val clips = if (configuration.topClips > 0)
-            twitch.getTopClips(userId, streamStarted, configuration.topClips).await() ?: emptyList()
+        val clips = if (config.twitch.topClips > 0)
+            twitch.getTopClips(userId, streamStarted, config.twitch.topClips).await() ?: emptyList()
         else
             emptyList()
 
-        val embed = makeEmbedBase(video?.title ?: "<Video Removed>", videoUrl).apply {
+        val rankName = config.discord.ranks["vod"].takeIf { config.discord.notifyHint }
+        val embed = makeEmbedBase(video?.title ?: "<Video Removed>", videoUrl, rankName).apply {
             appendIndex(index)
             if (clips.isNotEmpty()) field {
                 inline = false
@@ -239,7 +243,7 @@ class StreamWatcher(
 
         withPing("vod") { mention ->
             val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
-            val content = "$mention " + getText(language, "offline.content",
+            val content = "$mention " + text("offline.content",
                 "name" to userLogin,
                 "time" to duration
             )
@@ -262,11 +266,14 @@ class StreamWatcher(
         userId = stream.userId
 
         withPing("live") { mention ->
-            val content = "$mention " + getText(language, "live.content",
+            val content = "$mention " + text("live.content",
                 "name" to userLogin,
                 "game" to "**${game.name}**"
             )
-            val embed = makeEmbed(language, stream, game, userLogin, null)
+
+            val rankName = config.discord.ranks["live"].takeIf { config.discord.notifyHint }
+            val embed = makeEmbed(stream, game, userLogin, rankName, null)
+
             val message = Message(content = content, embed = embed)
             webhook.fireEvent("live") {
                 sendMessage(message).apply {
@@ -287,11 +294,14 @@ class StreamWatcher(
         val thumbnail = twitch.getThumbnail(stream).await()
 
         withPing("update") { mention ->
-            val content = "$mention " + getText(language, "update.content",
+            val content = "$mention " + text("update.content",
                 "name" to userLogin,
                 "game" to "**${game.name}**"
             )
-            val embed = makeEmbed(language, stream, game, userLogin, currentElement)
+
+            val rankName = config.discord.ranks["update"].takeIf { config.discord.notifyHint }
+            val embed = makeEmbed(stream, game, userLogin, rankName, currentElement)
+
             val message = Message(content = content, embed = embed)
             webhook.fireEvent("update") {
                 sendMessage(message).apply {
@@ -305,13 +315,13 @@ class StreamWatcher(
 
     // Run callback with mentionable role
     private inline fun <T> withPing(type: String, block: (String) -> T): T {
-        val roleId = jda.getRoleByType(configuration, type)
+        val roleId = jda.getRoleByType(config.discord, type)
         return block("<@&$roleId>")
     }
 
     // Fire webhook event if enabled in the configuration
-    private suspend inline fun <T> WebhookClient<*>.fireEvent(type: String, crossinline block: WebhookClient<*>.() -> RestAction<T>): T? {
-        return if (type in configuration.events) {
+    private suspend inline fun <T> WebhookClient<Message>.fireEvent(type: String, crossinline block: WebhookClient<Message>.() -> RestAction<T>): T? {
+        return if (type in config.discord.events) {
             block(this).await()
         } else {
             null
@@ -361,31 +371,35 @@ class StreamWatcher(
     }
 
     private fun text(key: String) = language.getText(key)
-}
+    private fun text(key: String, vararg tokens: Pair<String, String>) = language.getText(key, *tokens)
 
-private fun makeEmbedBase(title: String, url: String) = EmbedBuilder {
-    color = 0x6441A4
-    image = "attachment://thumbnail.jpg"
-    this.title = url
-    author(title)
-}
-
-private fun makeEmbed(
-    language: Locale,
-    stream: Stream,
-    game: Game,
-    twitchName: String,
-    currentSegment: StreamElement? = null
-) = makeEmbedBase(stream.title, "https://www.twitch.tv/$twitchName").apply {
-    field(language.getText("playing"), game.name)
-    field(
-        name=language.getText("started_at"),
-        value="<t:${stream.startedAt}:F>"
-    )
-    if (currentSegment != null) {
-        description = "Start watching at ${currentSegment.toVodLink("")}"
+    private fun makeEmbedBase(title: String, url: String, rankName: String?) = EmbedBuilder {
+        color = 0x6441A4
+        image = "attachment://thumbnail.jpg"
+        this.title = url
+        author(title)
+        rankName?.let {
+            footer(text("notify.hint", "rank" to "/notify role: $rankName"))
+        }
     }
-}.build()
+
+    private fun makeEmbed(
+        stream: Stream,
+        game: Game,
+        twitchName: String,
+        rankName: String?,
+        currentSegment: StreamElement? = null,
+    ) = makeEmbedBase(stream.title, "https://www.twitch.tv/$twitchName", rankName).apply {
+        field(text("playing"), game.name)
+        field(
+            name=text("started_at"),
+            value= DATE_TIME_LONG.format(stream.startedAt * 1000)
+        )
+        if (currentSegment != null) {
+            description = "Start watching at ${currentSegment.toVodLink("")}"
+        }
+    }.build()
+}
 
 private fun limit(input: String, limit: Int): String {
     if (input.length <= limit)

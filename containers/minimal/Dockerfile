@@ -9,7 +9,7 @@ RUN apk add binutils
 
 RUN jlink \
     --verbose \
-    --add-modules java.base,java.xml,java.naming,jdk.crypto.ec \
+    --add-modules java.base,java.logging,java.xml,jdk.crypto.ec \
     --compress 2 \
     --strip-debug \
     --no-header-files \
@@ -30,4 +30,11 @@ COPY --from=packager "$JAVA_HOME" "$JAVA_HOME"
 
 RUN apk --no-cache add ca-certificates
 
-CMD [ "java", "-Xmx256m", "-XX:+ShowCodeDetailsInExceptionMessages", "-XX:+CrashOnOutOfMemoryError", "-jar", "strumbot.jar" ]
+CMD [ \
+ "java", \
+ "-Xmx256m", \
+ "-XX:+ShowCodeDetailsInExceptionMessages", \
+ "-XX:+CrashOnOutOfMemoryError", \
+ "-jar", \
+ "strumbot.jar" \
+]

@@ -17,11 +17,13 @@
 @file:JvmName("Main")
 package strumbot
 
+import ch.qos.logback.classic.PatternLayout
 import dev.minn.jda.ktx.CoroutineEventManager
 import dev.minn.jda.ktx.await
 import dev.minn.jda.ktx.interactions.choice
+import dev.minn.jda.ktx.interactions.command
 import dev.minn.jda.ktx.interactions.option
-import dev.minn.jda.ktx.interactions.upsertCommand
+import dev.minn.jda.ktx.interactions.updateCommands
 import dev.minn.jda.ktx.light
 import dev.minn.jda.ktx.onCommand
 import kotlinx.coroutines.*
@@ -63,7 +65,7 @@ fun main() {
     RestAction.setDefaultTimeout(10, TimeUnit.SECONDS)
     AllowedMentions.setDefaultMentions(EnumSet.of(Message.MentionType.ROLE))
 
-    val configuration = loadConfiguration("config.json")
+    val config = loadConfiguration("config.json")
     val okhttp = OkHttpClient.Builder()
         .connectionPool(ConnectionPool(2, 20, TimeUnit.SECONDS))
         .build()
@@ -88,8 +90,8 @@ fun main() {
 
     // Create a coroutine manager with this scope and a default event timeout of 1 minute
     val manager = CoroutineEventManager(scope, 1.minutes)
-    manager.initCommands(configuration)
-    manager.initRoles(configuration)
+    manager.initCommands(config.discord)
+    manager.initRoles(config.discord)
 
     manager.listener<ShutdownEvent> {
         supervisor.cancel()
@@ -97,11 +99,11 @@ fun main() {
 
     log.info("Initializing twitch api")
     val twitch: TwitchApi = runBlocking {
-        createTwitchApi(okhttp, configuration.twitchClientId, configuration.twitchClientSecret, scope)
+        createTwitchApi(okhttp, config.twitch.clientId, config.twitch.clientSecret, scope)
     }
 
     log.info("Initializing discord connection")
-    val jda = light(configuration.token, enableCoroutines=false, intents=emptyList()) {
+    val jda = light(config.discord.token, enableCoroutines=false, intents=emptyList()) {
         setEventManager(manager)
         setHttpClient(okhttp)
         setCallbackPool(pool)
@@ -109,8 +111,17 @@ fun main() {
         setRateLimitPool(pool)
     }
 
-    configuration.logging?.let {
-        WebhookAppender.init(jda, it)
+    config.discord.logging?.let { cfg ->
+        config.logger.level?.let {
+            WebhookAppender.instance.level = it
+        }
+        config.logger.pattern?.let {
+            val layout = WebhookAppender.instance.encoder.layout as PatternLayout
+            layout.pattern = it
+            layout.start()
+        }
+
+        WebhookAppender.init(jda, cfg, scope)
     }
 
     // Cycling streaming status
@@ -118,14 +129,14 @@ fun main() {
     activityService.start()
 
     // Handle rank command
-    setupRankListener(jda, configuration)
+    setupRankListener(jda, config.discord)
     // Wait for cache to finish initializing
     jda.awaitReady()
 
     val watchedStreams = mutableMapOf<String, StreamWatcher>()
-    for (userLogin in configuration.twitchUser) {
+    for (userLogin in config.twitch.userNames) {
         val key = userLogin.lowercase(Locale.ROOT) // make sure we don't insert things twice
-        watchedStreams[key] = StreamWatcher(twitch, jda, configuration, userLogin, activityService)
+        watchedStreams[key] = StreamWatcher(twitch, jda, config, userLogin, activityService)
     }
 
     val twitchJob = startTwitchService(twitch, jda, watchedStreams)
@@ -153,13 +164,13 @@ fun main() {
 /**
  * Creates the roles which are mentioned for webhook notifications
  */
-private fun CoroutineEventManager.initRoles(configuration: Configuration) = listener<GenericGuildEvent> { event ->
+private fun CoroutineEventManager.initRoles(config: DiscordConfig) = listener<GenericGuildEvent> { event ->
     if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
     val guild = event.guild
 
-    if (!filterId(guild, configuration.guildId)) return@listener
+    if (!filterId(guild, config.guildId)) return@listener
 
-    configuration.ranks.values
+    config.ranks.values
         .asSequence()
         .filter { guild.getRolesByName(it, true).isEmpty() }
         .map { guild.createRole().setName(it) }
@@ -172,16 +183,18 @@ private fun CoroutineEventManager.initRoles(configuration: Configuration) = list
 /**
  * Creates the relevant commands for role management
  */
-private fun CoroutineEventManager.initCommands(configuration: Configuration) = listener<GenericGuildEvent> { event ->
+private fun CoroutineEventManager.initCommands(config: DiscordConfig) = listener<GenericGuildEvent> { event ->
     if (event !is GuildReadyEvent && event !is GuildJoinEvent) return@listener
     val guild = event.guild
 
-    if (!filterId(guild, configuration.guildId)) return@listener
+    if (!filterId(guild, config.guildId)) return@listener
 
-    guild.upsertCommand("rank", "Add or remove one of the notification roles") {
-        option<String>("role", "The role to assign or remove you from", required = true) {
-            configuration.ranks.forEach { (_, value) ->
-                choice(value, value)
+    guild.updateCommands {
+        command("notify", "Add or remove one of the notification roles") {
+            option<String>("role", "The role to assign or remove you from", required = true) {
+                config.ranks.forEach { (_, value) ->
+                    choice(value, value)
+                }
             }
         }
     }.queue()
@@ -190,13 +203,13 @@ private fun CoroutineEventManager.initCommands(configuration: Configuration) = l
 /**
  * Handles the rank command
  */
-private fun setupRankListener(jda: JDA, configuration: Configuration) = jda.onCommand("rank") { event ->
+private fun setupRankListener(jda: JDA, config: DiscordConfig) = jda.onCommand("notify") { event ->
     val guild = event.guild ?: return@onCommand
     val member = event.member ?: return@onCommand
 
     // Get the role instance for the requested rank
     val type = event.getOption("role")?.asString ?: ""
-    val role = guild.getRoleById(jda.getRoleByType(configuration, type)) ?: return@onCommand
+    val role = guild.getRoleById(jda.getRoleByType(config, type)) ?: return@onCommand
 
     event.deferReply(true).queue() // This is required to handle delayed response
     event.hook.setEphemeral(true) // Make messages only visible to command user

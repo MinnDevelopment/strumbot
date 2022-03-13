@@ -85,7 +85,7 @@ class TwitchApi(
                     log.warn("Authorization expired, refreshing token...")
                     authorize()
                     // Update authorization header to new token
-                    retryRequest(request)?.let(handler)
+                    retryRequest(request, handler)
                 }
                 response.code == 404 -> {
                     log.warn("Received 404 response for request to ${request.url}")
@@ -98,7 +98,7 @@ class TwitchApi(
                     } ?: 1000
 
                     delay(reset)
-                    retryRequest(request)?.let(handler)
+                    retryRequest(request, handler)
                 }
                 response.isSuccessful -> handler(response)
                 else -> throw response.asException()
@@ -106,8 +106,8 @@ class TwitchApi(
         }
     }
 
-    private suspend fun retryRequest(request: Request): Response? {
-        return makeRequest(request.newBuilder().authorization().build(), true) { it }
+    private suspend fun <T> retryRequest(request: Request, handler: (Response) -> T?): T? {
+        return makeRequest(request.newBuilder().authorization().build(), true, handler)
     }
 
     private fun get(url: String, vararg params: Pair<String, String>): Request {

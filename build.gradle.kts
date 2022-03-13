@@ -12,7 +12,7 @@ application {
 }
 
 group = "dev.minn"
-version = "1.3.0"
+version = "1.3.1"
 
 repositories {
     mavenLocal() // caching optimization
@@ -81,9 +81,12 @@ tasks.create<Copy>("release") {
         config.renameTo(File("$output/config.json"))
 
         File("containers/docker-compose.yml").let { file ->
-            file.writeText(file.readText()
-                .replace(Regex("(minnced/strumbot):.+?(-min)?\n"),
-                         "\$1:$version\$2\n")
+            file.writeText(
+                file.readText()
+                    .replace(
+                        Regex("(minnced/strumbot):.+?(-min)?(\\s+)"),
+                        "\$1:$version\$2\$3"
+                    )
             )
         }
     }

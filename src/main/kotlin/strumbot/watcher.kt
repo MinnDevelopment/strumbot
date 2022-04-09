@@ -103,6 +103,8 @@ data class StreamElement(val game: Game, val timestamp: Int, var videoId: String
 
     fun toVodLink(comment: String = game.name): String {
         val (display, twitchFormat) = Timestamps.from(timestamp)
+        if (videoId.isEmpty())
+            return "`${display}` $comment"
         val url = "${toVideoUrl()}?t=${twitchFormat}"
         return "[`${display}`](${url}) $comment"
     }
@@ -205,7 +207,6 @@ class StreamWatcher(
         timestamps.add(currentElement!!)
         currentElement = null
         val timestamps = this.timestamps.toList()
-        val firstSegment = timestamps.first()
         this.timestamps.clear()
 
         val index = timestamps.fold(StringBuilder()) { a, b -> a.append('\n').append(b.toVodLink()) }
@@ -217,8 +218,10 @@ class StreamWatcher(
             .filter { it.isNotEmpty() }
             .firstNotNullOfOrNull { twitch.getVideoById(it).await() }
 
+        // This will just be null if no video is available
         val thumbnail = video?.let { twitch.getThumbnail(it).await() }
-        val videoUrl = firstSegment.toVideoUrl()
+        // If no VOD is available we don't include a link
+        val videoUrl = video?.url
 
         val clips = if (config.twitch.topClips > 0)
             twitch.getTopClips(userId, streamStarted, config.twitch.topClips).await() ?: emptyList()
@@ -373,10 +376,13 @@ class StreamWatcher(
     private fun text(key: String) = language.getText(key)
     private fun text(key: String, vararg tokens: Pair<String, String>) = language.getText(key, *tokens)
 
-    private fun makeEmbedBase(title: String, url: String, rankName: String?) = EmbedBuilder {
+    private fun makeEmbedBase(title: String, url: String?, rankName: String?) = EmbedBuilder {
         color = 0x6441A4
         image = "attachment://thumbnail.jpg"
-        this.title = url
+        url?.let {
+            this.title = it
+        }
+
         author(title)
         rankName?.let {
             footer(text("notify.hint", "rank" to "/notify role: $rankName"))

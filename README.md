@@ -44,7 +44,7 @@ If you don't know how to create a discord bot and get access to the token: [How 
 - `role_name` Configuration of `type`->`role` to change the default names of the update roles
 - `enabled_events` Array of events to publish to the `stream_notifications` webhook
 - `logging` Optional webhook URL for errors and warnings printed at runtime (omit or null to disable)
-- `show_nofity_hint` Whether to show a hint in the embed footer about the `/notify` command
+- `show_notify_hints` Whether to show a hint in the embed footer about the `/notify` command
 
 The roles used for updates can be managed by the bot with the `/notify role: <type>` command.
 This command will automatically assign the role to the user.
@@ -85,6 +85,7 @@ The `offline_grace_period` is an engineering parameter which is helpful to handl
     "token": "NjUzMjM1MjY5MzM1NjQ2MjA4.*******.*******",
     "stream_notifications": "https://discord.com/api/webhooks/*******/******",
     "logging": null,
+    "show_notify_hints": true,
     "role_name": {
       "live": "live",
       "vod": "vod",

@@ -2,7 +2,7 @@ version: "2.2"
 
 services:
   strumbot:
-    image: minnced/strumbot:1.2.1-min
+    image: minnced/strumbot:1.3.3-min
     volumes:
       - ./config.json:/etc/strumbot/config.json
     restart: unless-stopped

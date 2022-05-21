@@ -41,7 +41,7 @@ If you don't know how to create a discord bot and get access to the token: [How 
 
 - `token` The discord bot token
 - `stream_notifications` The webhook URL to send stream updates to (see [How to create a webhook](https://github.com/MinnDevelopment/strumbot/blob/master/guides/HOW_TO_CREATE_A_WEBHOOK.md))
-- `role_name` Configuration of `type`->`role` to change the default names of the update roles
+- `role_name` Configuration of `type`->`role` to change the default names of the update roles (empty value `""` disables the role, and removes the role mention from notifications)
 - `enabled_events` Array of events to publish to the `stream_notifications` webhook
 - `logging` Optional webhook URL for errors and warnings printed at runtime (omit or null to disable)
 - `show_notify_hints` Whether to show a hint in the embed footer about the `/notify` command

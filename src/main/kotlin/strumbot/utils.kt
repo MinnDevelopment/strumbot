@@ -33,11 +33,15 @@ fun filterId(guild: Guild, id: Long) = guild.idLong == id || id == 0L
 fun JDA.getRoleByType(config: DiscordConfig, type: String): String {
     val roleName = config.ranks[type] ?: "0"
     if (type !in rankByType) {
-        // Find role by name
-        val roleId = getRolesByName(roleName, true)
-            .firstOrNull { filterId(it.guild, config.guildId) } // filter by server id (if applicable)
-            ?.id ?: return "0" // take id or return "0" as fallback
-        rankByType[type] = roleId
+        if (roleName.isEmpty()) {
+            rankByType[type] = "0"
+        } else {
+            // Find role by name
+            val roleId = getRolesByName(roleName, true)
+                .firstOrNull { filterId(it.guild, config.guildId) } // filter by server id (if applicable)
+                ?.id ?: return "0" // take id or return "0" as fallback
+            rankByType[type] = roleId
+        }
     }
     return rankByType[type] ?: "0"
 }

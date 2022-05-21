@@ -319,7 +319,10 @@ class StreamWatcher(
     // Run callback with mentionable role
     private inline fun <T> withPing(type: String, block: (String) -> T): T {
         val roleId = jda.getRoleByType(config.discord, type)
-        return block("<@&$roleId>")
+        return if (roleId != "0")
+            block("<@&$roleId>")
+        else
+            block("")
     }
 
     // Fire webhook event if enabled in the configuration

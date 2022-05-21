@@ -172,6 +172,7 @@ private fun CoroutineEventManager.initRoles(config: DiscordConfig) = listener<Ge
 
     config.ranks.values
         .asSequence()
+        .filter(String::isNotEmpty)
         .filter { guild.getRolesByName(it, true).isEmpty() }
         .map { guild.createRole().setName(it) }
         .forEach {
@@ -189,15 +190,20 @@ private fun CoroutineEventManager.initCommands(config: DiscordConfig) = listener
 
     if (!filterId(guild, config.guildId)) return@listener
 
-    guild.updateCommands {
-        command("notify", "Add or remove one of the notification roles") {
-            option<String>("role", "The role to assign or remove you from", required = true) {
-                config.ranks.forEach { (_, value) ->
-                    choice(value, value)
+    val roles = config.ranks.values.filter(String::isNotEmpty)
+    if (roles.isEmpty()) {
+        guild.updateCommands().queue()
+    } else {
+        guild.updateCommands {
+            command("notify", "Add or remove one of the notification roles") {
+                option<String>("role", "The role to assign or remove you from", required = true) {
+                    roles.forEach {
+                        choice(it, it)
+                    }
                 }
             }
-        }
-    }.queue()
+        }.queue()
+    }
 }
 
 /**
@@ -215,7 +221,7 @@ private fun setupRankListener(jda: JDA, config: DiscordConfig) = jda.onCommand("
     event.hook.setEphemeral(true) // Make messages only visible to command user
 
     try {
-        val added = toggleRole(member, role)
+        val added = member.toggleRole(role)
         event.hook.sendMessage(
             if (added) "Added the role"
             else       "Removed the role"
@@ -228,16 +234,15 @@ private fun setupRankListener(jda: JDA, config: DiscordConfig) = jda.onCommand("
     }
 }
 
-private suspend fun toggleRole(
-    member: Member,
+private suspend fun Member.toggleRole(
     role: Role
-) = if (role in member.roles) {
-    log.debug("Removing {} from {}", role.name, member.user.asTag)
-    role.guild.removeRoleFromMember(member, role).await()
+) = if (role in roles) {
+    log.debug("Removing {} from {}", role.name, user.asTag)
+    role.guild.removeRoleFromMember(this, role).await()
     false
 } else {
-    log.debug("Adding {} to {}", role.name, member.user.asTag)
-    role.guild.addRoleToMember(member, role).await()
+    log.debug("Adding {} to {}", role.name, user.asTag)
+    role.guild.addRoleToMember(this, role).await()
     true
 }
 

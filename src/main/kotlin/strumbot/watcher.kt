@@ -127,6 +127,7 @@ class StreamWatcher(
     @Volatile
     private var currentElement: StreamElement? = null
 
+    private var userName: String = userLogin
     private var offlineTimestamp = 0L
     private var streamStarted = 0L
     private var currentActivity: Activity? = null
@@ -247,7 +248,7 @@ class StreamWatcher(
         withPing("vod") { mention ->
             val (_, duration) = Timestamps.from((offlineTimestamp - streamStarted).toInt())
             val content = "$mention " + text("offline.content",
-                "name" to userLogin,
+                "name" to userName,
                 "time" to duration
             )
             val message = Message(content = content, embed = embed.build())
@@ -267,10 +268,11 @@ class StreamWatcher(
         streamStarted = stream.startedAt
         currentElement = StreamElement(game, 0, videoId)
         userId = stream.userId
+        userName = stream.userName
 
         withPing("live") { mention ->
             val content = "$mention " + text("live.content",
-                "name" to userLogin,
+                "name" to userName,
                 "game" to "**${game.name}**"
             )
 
@@ -298,7 +300,7 @@ class StreamWatcher(
 
         withPing("update") { mention ->
             val content = "$mention " + text("update.content",
-                "name" to userLogin,
+                "name" to userName,
                 "game" to "**${game.name}**"
             )
 

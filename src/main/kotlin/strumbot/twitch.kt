@@ -142,6 +142,7 @@ class TwitchApi(
                         stream.getString("language", "en"),
                         stream.getString("thumbnail_url"),
                         stream.getString("user_id"),
+                        stream.getString("user_login"),
                         stream.getString("user_name"),
                         ZonedDateTime.parse(stream.getString("started_at")).toEpochSecond()
                     )
@@ -297,6 +298,7 @@ data class Stream(
     val thumbnail: String,
     val userId: String,
     val userLogin: String,
+    val userName: String,
     val startedAt: Long)
 data class Video(
     val id: String,

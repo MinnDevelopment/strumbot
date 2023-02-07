@@ -29,7 +29,9 @@ class LocalizationManager {
             if (resource == null) {
                 if (locale.language == "en")
                     throw IllegalStateException("Could not load default resource for english!")
-                return getText(Locale.forLanguageTag("en"), name)
+                val translation = getText(Locale.forLanguageTag("en"), name)
+                translations[locale] = translations[Locale.forLanguageTag("en")]!!
+                return translation
             }
             translations[locale] = Properties().apply { load(resource) }
         }

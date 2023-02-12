@@ -5,7 +5,7 @@
 [example-config]: https://github.com/MinnDevelopment/strumbot/blob/master/example-config.json
 
 [ ![docker-pulls](https://img.shields.io/docker/pulls/minnced/strumbot?logo=docker&logoColor=white) ](https://hub.docker.com/r/minnced/strumbot)
-[ ![](https://img.shields.io/docker/image-size/minnced/strumbot/1.3.5-min?logo=docker&logoColor=white) ](https://hub.docker.com/layers/minnced/strumbot/1.3.5-min/images/sha256-014645c2266f267354b5af086c27c74a20e525c8cb5747555311f1e2456e072f?context=explore)
+[ ![](https://img.shields.io/docker/image-size/minnced/strumbot/1.3.6-min?logo=docker&logoColor=white) ](https://hub.docker.com/layers/minnced/strumbot/1.3.6-min/images/sha256-8ee42948585d4cf869633de6cb9a713c131e81e68cb26fe8d94f576ba7a85601)
 [ ![release](https://img.shields.io/github/v/tag/minndevelopment/strumbot) ](https://github.com/MinnDevelopment/strumbot/releases/latest)
 
 # Strumbot

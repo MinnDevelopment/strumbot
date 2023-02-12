@@ -190,15 +190,15 @@ private fun CoroutineEventManager.initCommands(config: DiscordConfig) = listener
 
     if (!filterId(guild, config.guildId)) return@listener
 
-    val roles = config.ranks.values.filter(String::isNotEmpty)
-    if (roles.isEmpty()) {
+    if (config.ranks.all { it.value.isBlank() }) {
         guild.updateCommands().queue()
     } else {
         guild.updateCommands {
             command("notify", "Add or remove one of the notification roles") {
                 option<String>("role", "The role to assign or remove you from", required = true) {
-                    roles.forEach {
-                        choice(it, it)
+                    config.ranks.forEach { (type, name) ->
+                        if (name.isNotBlank())
+                            choice(name, type)
                     }
                 }
             }
@@ -215,7 +215,10 @@ private fun setupRankListener(jda: JDA, config: DiscordConfig) = jda.onCommand("
 
     // Get the role instance for the requested rank
     val type = event.getOption("role")?.asString ?: ""
-    val role = guild.getRoleById(jda.getRoleByType(config, type)) ?: return@onCommand
+    val role = guild.getRoleById(jda.getRoleByType(config, type)) ?: run {
+        event.reply("Role for `$type` event could not be identified.").queue()
+        return@onCommand
+    }
 
     event.deferReply(true).queue() // This is required to handle delayed response
     event.hook.setEphemeral(true) // Make messages only visible to command user

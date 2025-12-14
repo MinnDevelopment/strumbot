@@ -4,6 +4,12 @@
 [rank-joining]: https://raw.githubusercontent.com/MinnDevelopment/strumbot/master/assets/readme/rank-joining.gif
 [example-config]: https://github.com/MinnDevelopment/strumbot/blob/master/example-config.json
 
+# 🚨Migration Notice
+
+This repository is no longer maintained. I've implemented a new version at [strumbot-rs](https://github.com/MinnDevelopment/strumbot-rs), which has better performance, stability, and smaller a install size.
+
+----
+
 [ ![docker-pulls](https://img.shields.io/docker/pulls/minnced/strumbot?logo=docker&logoColor=white) ](https://hub.docker.com/r/minnced/strumbot)
 [ ![](https://img.shields.io/docker/image-size/minnced/strumbot/1.3.6-min?logo=docker&logoColor=white) ](https://hub.docker.com/layers/minnced/strumbot/1.3.6-min/images/sha256-8ee42948585d4cf869633de6cb9a713c131e81e68cb26fe8d94f576ba7a85601)
 [ ![release](https://img.shields.io/github/v/tag/minndevelopment/strumbot) ](https://github.com/MinnDevelopment/strumbot/releases/latest)

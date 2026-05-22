@@ -1,4 +1,4 @@
-# How to create a twtich app
+# How to create a twitch app
 
 The twitch app provides a `client_id` which is required to access stream information.
 
